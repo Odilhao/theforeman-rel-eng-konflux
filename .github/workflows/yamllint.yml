@@ -1,0 +1,35 @@
+name: YAML Lint
+
+on:
+  pull_request:
+    paths:
+      - 'project/**/**.yaml'
+      - 'releases/**/**.yaml'
+      - '.yamllint'
+      - '.github/workflows/yamllint.yml'
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ['3.12']
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+    
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v6
+      with:
+        python-version: ${{ matrix.python-version }}
+    
+    - name: Install test dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install yamllint
+    
+    - name: Run tests with pytest
+      run: |
+        yamllint .
