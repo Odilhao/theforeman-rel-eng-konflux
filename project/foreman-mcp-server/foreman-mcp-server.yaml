@@ -1,0 +1,39 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Application
+metadata:
+  name: foreman-mcp-server
+  namespace: theforeman-org-tenant
+spec:
+  displayName: foreman-mcp-server
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/pipeline: '{"name":"docker-build-oci-ta","bundle":"latest"}'
+    git-provider: github
+    git-provider-url: https://github.com
+  name: foreman-mcp-server-develop
+  namespace: theforeman-org-tenant
+spec:
+  application: foreman-mcp-server
+  componentName: foreman-mcp-server-develop
+  containerImage: quay.io/konflux-fedora/theforeman-org-tenant/foreman-mcp-server-develop
+  source:
+    git:
+      dockerfileUrl: Containerfile
+      url: https://github.com/theforeman/foreman-mcp-server.git
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ImageRepository
+metadata:
+  labels:
+    appstudio.redhat.com/application: foreman-mcp-server
+    appstudio.redhat.com/component: foreman-mcp-server-develop
+  name: foreman-mcp-server-develop
+  namespace: theforeman-org-tenant
+spec:
+  image:
+    name: theforeman-org-tenant/foreman-mcp-server-develop
+    visibility: public
