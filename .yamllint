@@ -1,0 +1,14 @@
+---
+rules:
+  line-length: disable
+  indentation:
+    spaces: consistent
+  comments:
+    require-starting-space: true
+    min-spaces-from-content: 1 # https://github.com/redhat-developer/vscode-yaml/issues/433
+  document-start:
+    present: true
+  empty-lines:
+    max: 1
+  key-duplicates:
+    forbid-duplicated-merge-keys: false

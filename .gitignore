@@ -1,0 +1,11 @@
+tmp
+.tox
+*.cache*
+.vscode/
+.DS_Store
+# Local Python directories
+__pycache__/
+.venv/
+
+# VSCode 'history' extension
+.history/
