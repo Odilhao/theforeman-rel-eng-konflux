@@ -19,7 +19,7 @@ metadata:
 spec:
   application: foreman-mcp-server
   componentName: foreman-mcp-server-develop
-  containerImage: quay.io/konflux-fedora/theforeman-org-tenant/foreman-mcp-server-develop
+  containerImage: quay.io/foreman/foreman-mcp-server
   source:
     git:
       dockerfileUrl: Containerfile
@@ -36,5 +36,5 @@ metadata:
   namespace: theforeman-org-tenant
 spec:
   image:
-    name: theforeman-org-tenant/foreman-mcp-server-develop
+    name: theforeman/foreman-mcp-server
     visibility: public
