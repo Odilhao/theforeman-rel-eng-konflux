@@ -23,6 +23,7 @@ spec:
   source:
     git:
       dockerfileUrl: Containerfile
+      revision: develop
       url: https://github.com/theforeman/foreman-mcp-server.git
 ---
 apiVersion: appstudio.redhat.com/v1alpha1
