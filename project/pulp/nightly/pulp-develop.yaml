@@ -1,0 +1,40 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Application
+metadata:
+  name: pulp
+  namespace: theforeman-org-tenant
+spec:
+  displayName: pulp
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Component
+metadata:
+  annotations:
+    build.appstudio.openshift.io/pipeline: '{"name":"docker-build-oci-ta","bundle":"latest"}'
+    git-provider: github
+    git-provider-url: https://github.com
+  name: pulp-develop
+  namespace: theforeman-org-tenant
+spec:
+  application: foreman-mcp-server
+  componentName: pulp-develop
+  containerImage: quay.io/foreman/pulp-stage
+  source:
+    git:
+      dockerfileUrl: images/pulp/Containerfile
+      revision: main
+      url: https://github.com/theforeman/pulp-oci-images.git
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ImageRepository
+metadata:
+  labels:
+    appstudio.redhat.com/application: pulp
+    appstudio.redhat.com/component: pulp-develop
+  name: pulp-develop
+  namespace: theforeman-org-tenant
+spec:
+  image:
+    name: foreman/pulp
+    visibility: public
