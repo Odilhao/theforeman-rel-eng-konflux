@@ -19,7 +19,7 @@ metadata:
 spec:
   application: foreman-mcp-server
   componentName: foreman-mcp-server-develop
-  containerImage: quay.io/foreman/foreman-mcp-server
+  containerImage: quay.io/foreman/foreman-mcp-server-stage
   source:
     git:
       dockerfileUrl: Containerfile
