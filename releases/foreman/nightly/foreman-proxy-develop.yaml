@@ -1,0 +1,40 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ReleasePlan
+metadata:
+  name: foreman-proxy-develop-nightly
+  namespace: theforeman-org-tenant
+  labels:
+    release.appstudio.openshift.io/auto-release: "true"
+spec:
+  application: foreman
+  target: foreman-proxy-nightly
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ReleasePlanAdmission
+metadata:
+  name: foreman-proxy-nightly
+  namespace: theforeman-org-tenant
+spec:
+  applications:
+    - foreman
+  origin: theforeman-org-tenant
+  policy: foreman-proxy-release-policy
+  pipeline:
+    pipelineRef:
+      resolver: git
+      params:
+        - name: url
+          value: https://github.com/konflux-ci/release-service-catalog.git
+        - name: revision
+          value: production
+        - name: pathInRepo
+          value: pipelines/managed/push-to-external-registry/push-to-external-registry.yaml
+    serviceAccountName: release-service-account
+  data:
+    mapping:
+      components:
+        - name: foreman-proxy-develop
+          repository: quay.io/theforeman/foreman-proxy
+          tags:
+            - nightly

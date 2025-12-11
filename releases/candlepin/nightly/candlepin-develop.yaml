@@ -1,0 +1,40 @@
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ReleasePlan
+metadata:
+  name: candlepin-develop-nightly
+  namespace: theforeman-org-tenant
+  labels:
+    release.appstudio.openshift.io/auto-release: "true"
+spec:
+  application: candlepin
+  target: candlepin-nightly
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: ReleasePlanAdmission
+metadata:
+  name: candlepin-nightly
+  namespace: theforeman-org-tenant
+spec:
+  applications:
+    - candlepin
+  origin: theforeman-org-tenant
+  policy: candlepin-release-policy
+  pipeline:
+    pipelineRef:
+      resolver: git
+      params:
+        - name: url
+          value: https://github.com/konflux-ci/release-service-catalog.git
+        - name: revision
+          value: production
+        - name: pathInRepo
+          value: pipelines/managed/push-to-external-registry/push-to-external-registry.yaml
+    serviceAccountName: release-service-account
+  data:
+    mapping:
+      components:
+        - name: candlepin-develop
+          repository: quay.io/theforeman/candlepin
+          tags:
+            - nightly

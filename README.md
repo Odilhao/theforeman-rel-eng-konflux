@@ -17,7 +17,9 @@ To interact with the resources in this repository, you need:
 
 - **`project/`** - Contains project definitions for Konflux. Each project represents one [application](https://konflux-ci.dev/docs/building/creating/) with its own configuration and build rules.
 
-- **`release/`** - Contains definitions for each [release](https://konflux-ci.dev/docs/releasing/create-release/) created at specific points in time.
+- **`releases/`** - Contains [ReleasePlan](https://konflux-ci.dev/docs/releasing/create-release-plan/) definitions for automated and point-in-time releases. Nightly releases are configured with auto-release enabled.
+
+- **`docs/`** - Documentation including release logic and procedures.
 
 ### Getting Started
 
