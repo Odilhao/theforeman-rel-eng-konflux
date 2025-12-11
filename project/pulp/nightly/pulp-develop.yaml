@@ -17,13 +17,14 @@ metadata:
   name: pulp-develop
   namespace: theforeman-org-tenant
 spec:
-  application: foreman-mcp-server
+  application: pulp
   componentName: pulp-develop
   containerImage: quay.io/foreman/pulp-stage
   source:
     git:
       dockerfileUrl: images/pulp/Containerfile
       revision: main
+      context: images/pulp
       url: https://github.com/theforeman/pulp-oci-images.git
 ---
 apiVersion: appstudio.redhat.com/v1alpha1
