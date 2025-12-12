@@ -8,7 +8,7 @@ metadata:
     release.appstudio.openshift.io/auto-release: "true"
 spec:
   application: foreman-mcp-server
-  target: foreman-mcp-server-nightly
+  target: theforeman-org-tenant
 ---
 apiVersion: appstudio.redhat.com/v1alpha1
 kind: ReleasePlanAdmission
@@ -19,7 +19,7 @@ spec:
   applications:
     - foreman-mcp-server
   origin: theforeman-org-tenant
-  policy: foreman-mcp-server-release-policy
+  policy: theforeman-ec-policy
   pipeline:
     pipelineRef:
       resolver: git
