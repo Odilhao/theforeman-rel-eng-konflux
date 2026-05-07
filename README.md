@@ -1,6 +1,6 @@
 ## The Foreman Release Engineering Konflux Artifacts
 
-This repository contains YAML configuration files used to build, release, and maintain container images for [The Foreman](https://theforeman.org/) project using [Konflux](https://konflux.fedoraproject.org/).
+This repository contains YAML configuration files used to build, release, and maintain container images for [The Foreman](https://theforeman.org/) project using [Konflux](https://konflux-ci.fedoraproject.org/).
 
 ### About Konflux
 
@@ -11,7 +11,7 @@ Konflux is an open-source CI/CD platform that provides secure software supply ch
 To interact with the resources in this repository, you need:
 
 1. A valid account in the [Fedora Account System (FAS)](https://accounts.fedoraproject.org/)
-2. Access permissions configured in the [tenant-config RBAC settings](https://gitlab.com/fedora/infrastructure/konflux/tenants-config/-/blob/main/cluster/kfluxfedorap01/theforeman-org-tenant/rbac.yaml)
+2. Access permissions configured in the [tenant-config RBAC settings](https://gitlab.com/fedora/infrastructure/konflux/tenants-config/-/blob/main/clusters/kflux-fedora-01/tenants/theforeman-org-tenant/rbac.yaml)
 
 ### Repository Structure
 
@@ -26,18 +26,18 @@ To interact with the resources in this repository, you need:
 Follow these steps in order to get started with Konflux:
 
 1. **Install the GitHub App** (required for onboarding GitHub repositories):
-   - https://github.com/apps/konflux-fedora
+   - https://github.com/apps/red-hat-konflux-kflux-fedora-01
 
 2. **Access the Konflux UI** (use FAS authentication):
-   - https://konflux.fedoraproject.org
+   - https://konflux-ci.fedoraproject.org/
 
 3. **OpenShift Console** (alternative interface):
-   - https://console-openshift-console.apps.kfluxfedorap01.toli.p1.openshiftapps.com
+   - https://console-openshift-console.apps.kfluxfedorap01.toli.p1.openshiftapps.com/
 
 ### Additional Resources
 
 - **ArgoCD** - Used for deploying Konflux control plane and user configurations:
-  - https://argocd-server-argocd.apps.kfluxfedorap01.toli.p1.openshiftapps.com/
+  - https://argocd-tenants-config-server-argocd-tenants-config.apps.kflux-fedora-01.84db.p1.openshiftapps.com/
 
 - **Upstream Documentation** - General Konflux usage documentation:
   - https://konflux-ci.dev/docs/

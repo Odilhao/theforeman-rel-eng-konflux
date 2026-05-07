@@ -30,7 +30,7 @@ spec:
           value: production
         - name: pathInRepo
           value: pipelines/managed/push-to-external-registry/push-to-external-registry.yaml
-    serviceAccountName: release-service-account
+    serviceAccountName: release-sa-foreman
   data:
     mapping:
       components:
