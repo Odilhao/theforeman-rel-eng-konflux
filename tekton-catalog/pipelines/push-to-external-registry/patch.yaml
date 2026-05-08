@@ -23,10 +23,10 @@
   path: /spec/params/10/default
   value: quay.io/foreman/konflux-ci/trusted-artifacts
 
-# Pin tasks to the stable production branch of release-service-catalog
+# Tasks must match the development branch since the pipeline is sourced from there
 - op: add
   path: /spec/params/9/default
-  value: production
+  value: development
 
 # Pin the EC/conforma task to main
 - op: add
