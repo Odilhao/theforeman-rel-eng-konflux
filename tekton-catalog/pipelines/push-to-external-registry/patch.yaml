@@ -4,8 +4,8 @@
 # Upstream pipeline params (0-based indices used below):
 #   0: release
 #   1: releasePlan
-#   2: releasePlanAdmission   ← removed (no RPA on Fedora cluster)
-#   3: releaseServiceConfig   ← removed (no RPA on Fedora cluster)
+#   2: releasePlanAdmission   ← kept; collect-data receives "" and skips gracefully
+#   3: releaseServiceConfig   ← kept; collect-data receives "" and skips gracefully
 #   4: snapshot
 #   5: enterpriseContractPolicy
 #   6: enterpriseContractExtraRuleData
@@ -15,15 +15,13 @@
 #  10: ociStorage
 #
 # Upstream pipeline tasks (0-based indices used below):
-#   0: verify-access-to-resources  ← removed entirely (requires RPA/RSC)
+#   0: verify-access-to-resources  ← removed entirely (requires RPA/RSC with no defaults)
 #   1: collect-data
 #   ...
 #
 # Operations are ordered so that:
 #   1. Default-setting ops run before pipeline param removes (index shifts).
-#   2. collect-data param removes (tasks/1) run before removing tasks/0,
-#      so that tasks/1 still refers to collect-data at that point.
-#   3. verify-access-to-resources (tasks/0) is removed last.
+#   2. collect-data runAfter and tasks/0 removal run last.
 
 # Use our trusted-artifacts storage
 - op: replace
@@ -45,32 +43,38 @@
   path: /spec/params/5/default
   value: enterprise-contract-service/default
 
-# Remove releaseServiceConfig pipeline param (index 3 before any other removes)
-- op: remove
-  path: /spec/params/3
+# Default releasePlanAdmission and releaseServiceConfig to empty — our custom
+# collect-data task skips fetching those CRs when the values are empty.
+- op: add
+  path: /spec/params/2/default
+  value: ""
 
-# Remove releasePlanAdmission pipeline param (still at index 2 after above)
-- op: remove
-  path: /spec/params/2
+- op: add
+  path: /spec/params/3/default
+  value: ""
 
-# Remove releaseServiceConfig from collect-data task params (tasks/1, before tasks/0 is removed).
-# Task 1 (collect-data) params:
-#   0: release, 1: releasePlan, 2: releasePlanAdmission, 3: releaseServiceConfig, ...
-- op: remove
-  path: /spec/tasks/1/params/3
+# Override only collect-data to use the Foreman custom task, which makes
+# releasePlanAdmission and releaseServiceConfig optional. All other tasks
+# continue to resolve from the upstream catalog via $(params.taskGitUrl).
+- op: replace
+  path: /spec/tasks/1/taskRef
+  value:
+    resolver: git
+    params:
+      - name: url
+        value: https://github.com/theforeman/theforeman-rel-eng-konflux.git
+      - name: revision
+        value: develop
+      - name: pathInRepo
+        value: tekton-catalog/tasks/collect-data/collect-data.yaml
 
-# Remove releasePlanAdmission from collect-data (now at index 2)
-- op: remove
-  path: /spec/tasks/1/params/2
-
-# Remove collect-data's runAfter dependency on verify-access-to-resources so the
-# pipeline DAG stays valid after the task is removed.
+# Remove collect-data's runAfter dependency so the DAG stays valid after
+# verify-access-to-resources is removed.
 - op: remove
   path: /spec/tasks/1/runAfter
 
-# Remove verify-access-to-resources entirely — it exists solely to verify RPA/RSC
-# access, which is irrelevant on the Fedora cluster (no RPA). Its task definition
-# still declares releasePlanAdmission and releaseServiceConfig as required params
-# with no defaults, so Tekton validation would fail regardless.
+# Remove verify-access-to-resources entirely — its task definition requires
+# releasePlanAdmission and releaseServiceConfig with no defaults and cannot
+# be patched without maintaining a custom copy.
 - op: remove
   path: /spec/tasks/0
