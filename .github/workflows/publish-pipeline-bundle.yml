@@ -39,9 +39,8 @@ jobs:
         run: |
           SHA=$(git rev-parse --short HEAD)
           REPO=quay.io/foreman/tekton-catalog/pipeline-push-to-external-registry
-          PIPELINE=$(kustomize build tekton-catalog/pipelines/push-to-external-registry/)
-          echo "${PIPELINE}" | tkn bundle push "${REPO}:${SHA}" -f -
-          echo "${PIPELINE}" | tkn bundle push "${REPO}:latest" -f -
-          DIGEST=$(skopeo inspect --format '{{.Digest}}' "docker://${REPO}:latest")
-          echo "bundle_digest=${DIGEST}" >> "${GITHUB_OUTPUT}"
-          echo "Published ${REPO}:${SHA} and ${REPO}:latest@${DIGEST}"
+          kustomize build tekton-catalog/pipelines/push-to-external-registry/ \
+            | tkn bundle push "${REPO}:${SHA}" -f -
+          skopeo copy "docker://${REPO}:${SHA}" "docker://${REPO}:latest"
+          echo "bundle_sha=${SHA}" >> "${GITHUB_OUTPUT}"
+          echo "Published ${REPO}:${SHA} and ${REPO}:latest"

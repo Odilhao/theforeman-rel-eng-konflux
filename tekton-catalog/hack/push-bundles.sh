@@ -17,10 +17,10 @@ push_bundle() {
   echo "==> Pushing ${repo}:${sha}"
   echo "${yaml}" | tkn bundle push "${repo}:${sha}" -f -
 
-  echo "==> Pushing ${repo}:latest"
-  digest=$(echo "${yaml}" | tkn bundle push "${repo}:latest" -f - 2>&1 | grep -o 'sha256:[a-f0-9]*')
+  echo "==> Tagging ${repo}:latest"
+  skopeo copy "docker://${repo}:${sha}" "docker://${repo}:latest"
 
-  echo "==> Published ${repo}:${sha} and ${repo}:latest@${digest}"
+  echo "==> Published ${repo}:${sha} and ${repo}:latest"
 }
 
 push_bundle pipeline-push-to-external-registry tekton-catalog/pipelines/push-to-external-registry
