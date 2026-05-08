@@ -1,0 +1,45 @@
+---
+name: Publish Pipeline Bundles
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - 'tekton-catalog/**'
+  workflow_dispatch:
+
+jobs:
+  publish-bundle:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up kustomize
+        uses: imranismail/setup-kustomize@v2
+
+      - name: Install tkn CLI
+        run: |
+          TKN_VERSION=0.39.0
+          curl -Ls "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/tkn_${TKN_VERSION}_Linux_x86_64.tar.gz" \
+            | tar xz tkn
+          sudo mv tkn /usr/local/bin/
+          tkn version
+
+      - name: Login to Quay.io
+        uses: docker/login-action@v3
+        with:
+          registry: quay.io
+          username: ${{ secrets.QUAY_ROBOT_USERNAME }}
+          password: ${{ secrets.QUAY_ROBOT_TOKEN }}
+
+      - name: Build and push push-to-external-registry bundle
+        id: push_bundle
+        run: |
+          BUNDLE_REF=quay.io/foreman/tekton-catalog/pipeline-push-to-external-registry:latest
+          kustomize build tekton-catalog/pipelines/push-to-external-registry/ \
+            | tkn bundle push "${BUNDLE_REF}" -f -
+          DIGEST=$(skopeo inspect --format '{{.Digest}}' "docker://${BUNDLE_REF}")
+          echo "bundle_digest=${DIGEST}" >> "${GITHUB_OUTPUT}"
+          echo "Published ${BUNDLE_REF}@${DIGEST}"

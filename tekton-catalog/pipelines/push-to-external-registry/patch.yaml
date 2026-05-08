@@ -1,0 +1,67 @@
+---
+# JSON 6902 patch for the push-to-external-registry pipeline.
+#
+# Upstream pipeline params (0-based indices used below):
+#   0: release
+#   1: releasePlan
+#   2: releasePlanAdmission   ← removed (no RPA on Fedora cluster)
+#   3: releaseServiceConfig   ← removed (no RPA on Fedora cluster)
+#   4: snapshot
+#   5: enterpriseContractPolicy
+#   6: enterpriseContractExtraRuleData
+#   7: verify_ec_task_git_revision
+#   8: taskGitUrl
+#   9: taskGitRevision
+#  10: ociStorage
+#
+# Operations are ordered so that default-setting ops run before the removes
+# (which shift array indices). Task param removes are independent of pipeline
+# param removes and run last.
+
+# Use our trusted-artifacts storage
+- op: replace
+  path: /spec/params/10/default
+  value: quay.io/foreman/konflux-ci/trusted-artifacts
+
+# Pin tasks to the stable production branch of release-service-catalog
+- op: add
+  path: /spec/params/9/default
+  value: production
+
+# Pin the EC/conforma task to main
+- op: add
+  path: /spec/params/7/default
+  value: main
+
+# Default EC policy for the Fedora cluster
+- op: add
+  path: /spec/params/5/default
+  value: enterprise-contract-service/default
+
+# Remove releaseServiceConfig pipeline param (index 3 before any other removes)
+- op: remove
+  path: /spec/params/3
+
+# Remove releasePlanAdmission pipeline param (still at index 2 after above)
+- op: remove
+  path: /spec/params/2
+
+# Remove releaseServiceConfig from verify-access-to-resources task params.
+# Task 0 (verify-access-to-resources) params:
+#   0: release, 1: releasePlan, 2: releasePlanAdmission, 3: releaseServiceConfig, ...
+- op: remove
+  path: /spec/tasks/0/params/3
+
+# Remove releasePlanAdmission from verify-access-to-resources (now at index 2)
+- op: remove
+  path: /spec/tasks/0/params/2
+
+# Remove releaseServiceConfig from collect-data task params.
+# Task 1 (collect-data) params:
+#   0: release, 1: releasePlan, 2: releasePlanAdmission, 3: releaseServiceConfig, ...
+- op: remove
+  path: /spec/tasks/1/params/3
+
+# Remove releasePlanAdmission from collect-data (now at index 2)
+- op: remove
+  path: /spec/tasks/1/params/2

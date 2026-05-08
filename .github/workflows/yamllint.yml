@@ -6,6 +6,7 @@ on:
     paths:
       - 'project/**/**.yaml'
       - 'releases/**/**.yaml'
+      - 'tekton-catalog/**/**.yaml'
       - '.yamllint'
       - '.github/workflows/yamllint.yml'
   workflow_dispatch:
