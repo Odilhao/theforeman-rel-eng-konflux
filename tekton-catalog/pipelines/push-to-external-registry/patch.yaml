@@ -63,6 +63,11 @@
 - op: remove
   path: /spec/tasks/1/params/2
 
+# Remove collect-data's runAfter dependency on verify-access-to-resources so the
+# pipeline DAG stays valid after the task is removed.
+- op: remove
+  path: /spec/tasks/1/runAfter
+
 # Remove verify-access-to-resources entirely — it exists solely to verify RPA/RSC
 # access, which is irrelevant on the Fedora cluster (no RPA). Its task definition
 # still declares releasePlanAdmission and releaseServiceConfig as required params
