@@ -14,9 +14,16 @@
 #   9: taskGitRevision
 #  10: ociStorage
 #
-# Operations are ordered so that default-setting ops run before the removes
-# (which shift array indices). Task param removes are independent of pipeline
-# param removes and run last.
+# Upstream pipeline tasks (0-based indices used below):
+#   0: verify-access-to-resources  ← removed entirely (requires RPA/RSC)
+#   1: collect-data
+#   ...
+#
+# Operations are ordered so that:
+#   1. Default-setting ops run before pipeline param removes (index shifts).
+#   2. collect-data param removes (tasks/1) run before removing tasks/0,
+#      so that tasks/1 still refers to collect-data at that point.
+#   3. verify-access-to-resources (tasks/0) is removed last.
 
 # Use our trusted-artifacts storage
 - op: replace
@@ -46,17 +53,7 @@
 - op: remove
   path: /spec/params/2
 
-# Remove releaseServiceConfig from verify-access-to-resources task params.
-# Task 0 (verify-access-to-resources) params:
-#   0: release, 1: releasePlan, 2: releasePlanAdmission, 3: releaseServiceConfig, ...
-- op: remove
-  path: /spec/tasks/0/params/3
-
-# Remove releasePlanAdmission from verify-access-to-resources (now at index 2)
-- op: remove
-  path: /spec/tasks/0/params/2
-
-# Remove releaseServiceConfig from collect-data task params.
+# Remove releaseServiceConfig from collect-data task params (tasks/1, before tasks/0 is removed).
 # Task 1 (collect-data) params:
 #   0: release, 1: releasePlan, 2: releasePlanAdmission, 3: releaseServiceConfig, ...
 - op: remove
@@ -65,3 +62,10 @@
 # Remove releasePlanAdmission from collect-data (now at index 2)
 - op: remove
   path: /spec/tasks/1/params/2
+
+# Remove verify-access-to-resources entirely — it exists solely to verify RPA/RSC
+# access, which is irrelevant on the Fedora cluster (no RPA). Its task definition
+# still declares releasePlanAdmission and releaseServiceConfig as required params
+# with no defaults, so Tekton validation would fail regardless.
+- op: remove
+  path: /spec/tasks/0
