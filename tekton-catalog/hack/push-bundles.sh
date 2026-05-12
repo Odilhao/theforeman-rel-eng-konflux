@@ -12,20 +12,29 @@ push_bundle() {
   local built
   built=$(kustomize build "${src}")
 
-  local min_version
-  min_version=$(echo "${built}" | python3 -c \
-    "import sys, yaml; d = yaml.safe_load(sys.stdin); \
-     print(d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])")
+  # Tasks carry app.kubernetes.io/version (e.g. 0.9.3); pipelines fall back
+  # to tekton.dev/pipelines.minVersion (e.g. 0.12.1).
+  local full_version
+  full_version=$(echo "${built}" | python3 -c "
+import sys, yaml
+d = yaml.safe_load(sys.stdin)
+version = (d['metadata'].get('labels', {}).get('app.kubernetes.io/version')
+           or d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])
+print(version)")
 
-  echo "==> Building ${name} (minVersion=${min_version})"
+  local minor_version
+  minor_version=$(echo "${full_version}" | cut -d. -f1,2)
 
-  echo "==> Pushing ${repo}:${min_version}"
-  echo "${built}" | tkn bundle push "${repo}:${min_version}" -f -
+  echo "==> Building ${name} (version=${full_version})"
 
-  echo "==> Tagging ${repo}:latest"
-  skopeo copy "docker://${repo}:${min_version}" "docker://${repo}:latest"
+  echo "==> Pushing ${repo}:${full_version}"
+  echo "${built}" | tkn bundle push "${repo}:${full_version}" -f -
 
-  echo "==> Published ${repo}:${min_version} and ${repo}:latest"
+  echo "==> Tagging ${repo}:${minor_version} and ${repo}:latest"
+  skopeo copy "docker://${repo}:${full_version}" "docker://${repo}:${minor_version}"
+  skopeo copy "docker://${repo}:${full_version}" "docker://${repo}:latest"
+
+  echo "==> Published ${repo}:${full_version}, ${repo}:${minor_version} and ${repo}:latest"
 }
 
 push_bundle pipeline-push-to-external-registry tekton-catalog/pipelines/push-to-external-registry

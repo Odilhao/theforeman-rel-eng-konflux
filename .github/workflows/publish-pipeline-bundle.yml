@@ -52,23 +52,33 @@ jobs:
         run: |
           REPO=quay.io/foreman/tekton-catalog/pipeline-push-to-external-registry
           BUILT=$(kustomize build tekton-catalog/pipelines/push-to-external-registry/)
-          MIN_VERSION=$(echo "$BUILT" | python3 -c \
-            "import sys, yaml; d = yaml.safe_load(sys.stdin); \
-             print(d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])")
-          echo "Publishing ${REPO}:${MIN_VERSION}"
-          echo "$BUILT" | tkn bundle push "${REPO}:${MIN_VERSION}" -f -
-          skopeo copy "docker://${REPO}:${MIN_VERSION}" "docker://${REPO}:latest"
-          echo "Published ${REPO}:${MIN_VERSION} and ${REPO}:latest"
+          FULL_VERSION=$(echo "$BUILT" | python3 -c "
+import sys, yaml
+d = yaml.safe_load(sys.stdin)
+version = (d['metadata'].get('labels', {}).get('app.kubernetes.io/version')
+           or d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])
+print(version)")
+          MINOR_VERSION=$(echo "$FULL_VERSION" | cut -d. -f1,2)
+          echo "Publishing ${REPO}:${FULL_VERSION} and ${REPO}:${MINOR_VERSION}"
+          echo "$BUILT" | tkn bundle push "${REPO}:${FULL_VERSION}" -f -
+          skopeo copy "docker://${REPO}:${FULL_VERSION}" "docker://${REPO}:${MINOR_VERSION}"
+          skopeo copy "docker://${REPO}:${FULL_VERSION}" "docker://${REPO}:latest"
+          echo "Published ${REPO}:${FULL_VERSION}, ${REPO}:${MINOR_VERSION} and ${REPO}:latest"
 
       - name: Build and push buildah-oci-ta task bundle
         if: steps.filter.outputs.task-buildah-oci-ta == 'true'
         run: |
           REPO=quay.io/foreman/tekton-catalog/task-buildah-oci-ta
           BUILT=$(kustomize build tekton-catalog/tasks/buildah-oci-ta/)
-          MIN_VERSION=$(echo "$BUILT" | python3 -c \
-            "import sys, yaml; d = yaml.safe_load(sys.stdin); \
-             print(d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])")
-          echo "Publishing ${REPO}:${MIN_VERSION}"
-          echo "$BUILT" | tkn bundle push "${REPO}:${MIN_VERSION}" -f -
-          skopeo copy "docker://${REPO}:${MIN_VERSION}" "docker://${REPO}:latest"
-          echo "Published ${REPO}:${MIN_VERSION} and ${REPO}:latest"
+          FULL_VERSION=$(echo "$BUILT" | python3 -c "
+import sys, yaml
+d = yaml.safe_load(sys.stdin)
+version = (d['metadata'].get('labels', {}).get('app.kubernetes.io/version')
+           or d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])
+print(version)")
+          MINOR_VERSION=$(echo "$FULL_VERSION" | cut -d. -f1,2)
+          echo "Publishing ${REPO}:${FULL_VERSION} and ${REPO}:${MINOR_VERSION}"
+          echo "$BUILT" | tkn bundle push "${REPO}:${FULL_VERSION}" -f -
+          skopeo copy "docker://${REPO}:${FULL_VERSION}" "docker://${REPO}:${MINOR_VERSION}"
+          skopeo copy "docker://${REPO}:${FULL_VERSION}" "docker://${REPO}:latest"
+          echo "Published ${REPO}:${FULL_VERSION}, ${REPO}:${MINOR_VERSION} and ${REPO}:latest"
