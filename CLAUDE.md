@@ -97,7 +97,7 @@ Version format is MAJOR.MINOR only (`3.19` is valid; `3.19.1` or `nightly` are r
 
 | Tool | Min version | Verify |
 |---|---|---|
-| `python3` | ≥ 3.9 | `python3 --version` |
+| `uv` | any | `uv --version` |
 | `git` | ≥ 2.36 | `git --version` |
 | `gh` (GitHub CLI) | any | `gh auth status` |
 | `glab` (GitLab CLI) | any | `glab auth status` |
@@ -106,7 +106,7 @@ Version format is MAJOR.MINOR only (`3.19` is valid; `3.19.1` or `nightly` are r
 | `kustomize` | any | `kustomize version` |
 | `oc` | any | `oc version` |
 
-**Python dependencies**: stdlib + `jinja2` only. No virtualenv required.
+**Python execution**: all scripts are run via `uv run` — `uv` manages the Python interpreter (≥ 3.9) and dependencies automatically. No manual `pip install` or virtualenv needed. The only non-stdlib dependency is `jinja2`; declare it in `/// script` inline metadata or a `pyproject.toml` at `hack/branch-release/`.
 
 ## Required fork setup
 
@@ -144,10 +144,10 @@ Scripts enforce this in preflight and will fail if remotes are wrong:
 
 ```bash
 # Always dry-run first
-hack/branch-release/branch_konflux --version=3.19 --dry-run
+uv run hack/branch-release/branch_konflux --version=3.19 --dry-run
 
 # Real run (interactive by default)
-hack/branch-release/branch_konflux --version=3.19
+uv run hack/branch-release/branch_konflux --version=3.19
 ```
 
 ### Orchestrator step order
@@ -191,6 +191,12 @@ If a branch was created with wrong files:
 2. Rerun `branch_konflux` for the affected step: `--step=branch-oci-foreman-oci-images`
 
 The `--recreate` flag (when implemented) will automate this.
+
+## Running tests
+
+```bash
+uv run pytest hack/branch-release/tests/
+```
 
 ## Linting and validation
 
