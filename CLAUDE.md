@@ -97,7 +97,7 @@ Version format is MAJOR.MINOR only (`3.19` is valid; `3.19.1` or `nightly` are r
 
 | Tool | Min version | Verify |
 |---|---|---|
-| `uv` | any | `uv --version` |
+| `uv` | ≥ 0.4.0 | `uv --version` |
 | `git` | ≥ 2.36 | `git --version` |
 | `gh` (GitHub CLI) | any | `gh auth status` |
 | `glab` (GitLab CLI) | any | `glab auth status` |
@@ -137,7 +137,7 @@ Scripts enforce this in preflight and will fail if remotes are wrong:
 |---|---|
 | `--dry-run` | Print actions without making changes |
 | `--auto` | Non-interactive; skip all confirmation prompts |
-| `--step=NAME` | Run a single named step and exit |
+| `--step=NAME` | Resume from a named step: skips all steps before it, then runs that step and all subsequent ones |
 | `--skip-rpm-check` | Skip RPM availability gate (useful when RPMs are not yet published) |
 
 ## Branching a new release
@@ -187,10 +187,13 @@ rm -rf /tmp/konflux-branch-3.19/
 
 If a branch was created with wrong files:
 
-1. Manually delete the branch in the affected repo: `git push upstream --delete konflux-foreman-3.19`
+1. Delete the branch (requires maintainer access to the upstream org repo):
+   ```bash
+   gh api -X DELETE repos/theforeman/foreman-oci-images/git/refs/heads/konflux-foreman-3.19
+   ```
 2. Rerun `branch_konflux` for the affected step: `--step=branch-oci-foreman-oci-images`
 
-The `--recreate` flag (when implemented) will automate this.
+The `--recreate` flag (tracked in #26) will automate step 1.
 
 ## Running tests
 
@@ -217,12 +220,14 @@ Bundles are **not** built from this repo's YAML directly — they are assembled 
 
 `tekton-catalog/hack/push-bundles.sh` is the local equivalent for manual testing only.
 
+**When a task bundle is updated:** after a new `task-buildah-oci-ta` bundle is published (triggered by a merge to `develop` that changes `tekton-catalog/tasks/buildah-oci-ta/`), open a follow-up PR to every OCI image repo to update the bundle digest in their `.tekton/` files. Use `skopeo inspect docker://quay.io/foreman/tekton-catalog/task-buildah-oci-ta:0.9 | jq -r .Digest` to get the current digest.
+
 ## PR/MR rules
 
 - Never push directly to `develop` or `main` — always open a PR/MR
 - No force-push
 - No skipping hooks (`--no-verify`)
-- Do not modify `.tekton` pipeline YAML files directly in upstream repos (foreman-oci-images, pulp-oci-images, candlepin-oci-images) — those are managed by Konflux
+- `.tekton` pipeline YAML files in upstream OCI repos are managed by Konflux automation, but **must be updated manually** when a custom task bundle changes. When `tekton-catalog/tasks/buildah-oci-ta/` is updated and a new bundle is published, open a follow-up PR to every OCI image repo (`foreman-oci-images`, `pulp-oci-images`, `candlepin-oci-images`, `foreman-mcp-server`) to update the bundle digest. All repos must reference the same custom bundle version (tracked in #40).
 
 ## Architecture: how nightly releases work
 
