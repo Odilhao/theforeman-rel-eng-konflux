@@ -4,8 +4,6 @@ name: YAML Lint
 on:
   pull_request:
     paths:
-      - 'project/**/**.yaml'
-      - 'releases/**/**.yaml'
       - 'tekton-catalog/**/**.yaml'
       - '.yamllint'
       - '.github/workflows/yamllint.yml'
