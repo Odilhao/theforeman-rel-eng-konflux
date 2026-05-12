@@ -1,0 +1,79 @@
+---
+# JSON 6902 patch for the buildah-oci-ta task.
+#
+# Upstream task steps (0-based indices used below):
+# curl -Ls "$URL" | yq ".spec.steps.[].name" | nl -v0
+#      0  use-trusted-artifact
+#      1  build
+#      2  push
+#      3  sbom-syft-generate
+#      4  prepare-sboms
+#      5  upload-sbom
+
+# Set a low stepTemplate baseline so steps without explicit resources
+# don't silently consume large allocations.
+- op: replace
+  path: /spec/stepTemplate/computeResources
+  value:
+    limits:
+      memory: 256Mi
+    requests:
+      memory: 128Mi
+
+# use-trusted-artifact has no computeResources set upstream; it inherits
+# from stepTemplate (256Mi is sufficient for extracting trusted artifacts).
+
+# build: large Foreman image requires substantial memory.
+- op: replace
+  path: /spec/steps/1/computeResources
+  value:
+    limits:
+      cpu: 4600m
+      memory: 16Gi
+    requests:
+      cpu: 4600m
+      memory: 16Gi
+
+# push
+- op: replace
+  path: /spec/steps/2/computeResources
+  value:
+    limits:
+      cpu: 600m
+      memory: 1Gi
+    requests:
+      cpu: 600m
+      memory: 128Mi
+
+# sbom-syft-generate: OOM failure observed at the upstream 4Gi limit.
+- op: replace
+  path: /spec/steps/3/computeResources
+  value:
+    limits:
+      cpu: 1100m
+      memory: 8Gi
+    requests:
+      cpu: 1100m
+      memory: 128Mi
+
+# prepare-sboms
+- op: replace
+  path: /spec/steps/4/computeResources
+  value:
+    limits:
+      cpu: 100m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+# upload-sbom
+- op: replace
+  path: /spec/steps/5/computeResources
+  value:
+    limits:
+      cpu: 100m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 128Mi

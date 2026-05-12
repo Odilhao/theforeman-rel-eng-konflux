@@ -16,10 +16,22 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            pipeline:
+              - 'tekton-catalog/pipelines/**'
+            task-buildah-oci-ta:
+              - 'tekton-catalog/tasks/buildah-oci-ta/**'
+
       - name: Set up kustomize
+        if: steps.filter.outputs.pipeline == 'true' || steps.filter.outputs.task-buildah-oci-ta == 'true'
         uses: imranismail/setup-kustomize@v2
 
       - name: Install tkn CLI
+        if: steps.filter.outputs.pipeline == 'true' || steps.filter.outputs.task-buildah-oci-ta == 'true'
         run: |
           TKN_VERSION=0.39.0
           curl -Ls "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/tkn_${TKN_VERSION}_Linux_x86_64.tar.gz" \
@@ -28,19 +40,35 @@ jobs:
           tkn version
 
       - name: Login to Quay.io
+        if: steps.filter.outputs.pipeline == 'true' || steps.filter.outputs.task-buildah-oci-ta == 'true'
         uses: redhat-actions/podman-login@v1
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_ROBOT_USERNAME }}
           password: ${{ secrets.QUAY_ROBOT_TOKEN }}
 
-      - name: Build and push push-to-external-registry bundle
-        id: push_bundle
+      - name: Build and push push-to-external-registry pipeline bundle
+        if: steps.filter.outputs.pipeline == 'true'
         run: |
-          SHA=$(git rev-parse --short HEAD)
           REPO=quay.io/foreman/tekton-catalog/pipeline-push-to-external-registry
-          kustomize build tekton-catalog/pipelines/push-to-external-registry/ \
-            | tkn bundle push "${REPO}:${SHA}" -f -
-          skopeo copy "docker://${REPO}:${SHA}" "docker://${REPO}:latest"
-          echo "bundle_sha=${SHA}" >> "${GITHUB_OUTPUT}"
-          echo "Published ${REPO}:${SHA} and ${REPO}:latest"
+          BUILT=$(kustomize build tekton-catalog/pipelines/push-to-external-registry/)
+          MIN_VERSION=$(echo "$BUILT" | python3 -c \
+            "import sys, yaml; d = yaml.safe_load(sys.stdin); \
+             print(d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])")
+          echo "Publishing ${REPO}:${MIN_VERSION}"
+          echo "$BUILT" | tkn bundle push "${REPO}:${MIN_VERSION}" -f -
+          skopeo copy "docker://${REPO}:${MIN_VERSION}" "docker://${REPO}:latest"
+          echo "Published ${REPO}:${MIN_VERSION} and ${REPO}:latest"
+
+      - name: Build and push buildah-oci-ta task bundle
+        if: steps.filter.outputs.task-buildah-oci-ta == 'true'
+        run: |
+          REPO=quay.io/foreman/tekton-catalog/task-buildah-oci-ta
+          BUILT=$(kustomize build tekton-catalog/tasks/buildah-oci-ta/)
+          MIN_VERSION=$(echo "$BUILT" | python3 -c \
+            "import sys, yaml; d = yaml.safe_load(sys.stdin); \
+             print(d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])")
+          echo "Publishing ${REPO}:${MIN_VERSION}"
+          echo "$BUILT" | tkn bundle push "${REPO}:${MIN_VERSION}" -f -
+          skopeo copy "docker://${REPO}:${MIN_VERSION}" "docker://${REPO}:latest"
+          echo "Published ${REPO}:${MIN_VERSION} and ${REPO}:latest"
