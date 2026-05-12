@@ -183,17 +183,31 @@ Manual cleanup:
 rm -rf /tmp/konflux-branch-3.19/
 ```
 
-## Recovery / --recreate
+## Recovery
 
-If a branch was created with wrong files:
+**OCI image branches are permanent** — do not delete them. They are part of the project history and the images they produce are published to production Quay namespaces (`quay.io/theforeman/`). A versioned image is reproducible from the same branch at any time.
 
-1. Delete the branch (requires maintainer access to the upstream org repo):
-   ```bash
-   gh api -X DELETE repos/theforeman/foreman-oci-images/git/refs/heads/konflux-foreman-3.19
+If a branch was created with wrong `.tekton` files, push a fix commit directly to the versioned branch:
+
+```bash
+git checkout konflux-foreman-3.19
+# edit the wrong file
+git commit -m "Fix .tekton pipeline for 3.19"
+git push origin konflux-foreman-3.19
+```
+
+**Konflux resources are ephemeral** — the Component and ReleasePlan CRs in tenants-config can be freely removed and recreated. To de-register a versioned release from Konflux (e.g., after a bad rollout):
+
+1. Remove the versioned overlay directories from tenants-config:
    ```
-2. Rerun `branch_konflux` for the affected step: `--step=branch-oci-foreman-oci-images`
+   foreman/components/3.19/
+   foreman/releaseplans/3.19/
+   ```
+2. Remove those paths from the parent `kustomization.yaml` files.
+3. Merge the MR — ArgoCD reconciles and removes the Component/ReleasePlan CRs.
+4. The branch and its images remain intact and can be re-registered later.
 
-The `--recreate` flag (tracked in #26) will automate step 1.
+See issue #35 for the full rollback runbook.
 
 ## Running tests
 
