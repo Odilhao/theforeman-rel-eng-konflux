@@ -52,12 +52,7 @@ jobs:
         run: |
           REPO=quay.io/foreman/tekton-catalog/pipeline-push-to-external-registry
           BUILT=$(kustomize build tekton-catalog/pipelines/push-to-external-registry/)
-          FULL_VERSION=$(echo "$BUILT" | python3 -c "
-import sys, yaml
-d = yaml.safe_load(sys.stdin)
-version = (d['metadata'].get('labels', {}).get('app.kubernetes.io/version')
-           or d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])
-print(version)")
+          FULL_VERSION=$(echo "$BUILT" | python3 -c "import sys, yaml; d = yaml.safe_load(sys.stdin); print(d['metadata'].get('labels', {}).get('app.kubernetes.io/version') or d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])")
           MINOR_VERSION=$(echo "$FULL_VERSION" | cut -d. -f1,2)
           echo "Publishing ${REPO}:${FULL_VERSION} and ${REPO}:${MINOR_VERSION}"
           echo "$BUILT" | tkn bundle push "${REPO}:${FULL_VERSION}" -f -
@@ -70,12 +65,7 @@ print(version)")
         run: |
           REPO=quay.io/foreman/tekton-catalog/task-buildah-oci-ta
           BUILT=$(kustomize build tekton-catalog/tasks/buildah-oci-ta/)
-          FULL_VERSION=$(echo "$BUILT" | python3 -c "
-import sys, yaml
-d = yaml.safe_load(sys.stdin)
-version = (d['metadata'].get('labels', {}).get('app.kubernetes.io/version')
-           or d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])
-print(version)")
+          FULL_VERSION=$(echo "$BUILT" | python3 -c "import sys, yaml; d = yaml.safe_load(sys.stdin); print(d['metadata'].get('labels', {}).get('app.kubernetes.io/version') or d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])")
           MINOR_VERSION=$(echo "$FULL_VERSION" | cut -d. -f1,2)
           echo "Publishing ${REPO}:${FULL_VERSION} and ${REPO}:${MINOR_VERSION}"
           echo "$BUILT" | tkn bundle push "${REPO}:${FULL_VERSION}" -f -
