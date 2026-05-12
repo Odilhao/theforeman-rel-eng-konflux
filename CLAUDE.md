@@ -82,7 +82,7 @@ The branching scripts plan to create a **different** `releases/` directory holdi
 
 ```bash
 VERSION=3.19
-BRANCH_NAME=konflux-foreman-3.19
+BRANCH_NAME=foreman-3.19
 # Default branch is detected dynamically via `gh repo view --json defaultBranchRef`
 # Do not hardcode master/main here.
 OCI_REPOS="theforeman/foreman-oci-images theforeman/pulp-oci-images theforeman/candlepin-oci-images"
@@ -187,13 +187,15 @@ rm -rf /tmp/konflux-branch-3.19/
 
 **OCI image branches are permanent** — do not delete them. They are part of the project history and the images they produce are published to production Quay namespaces (`quay.io/theforeman/`). A versioned image is reproducible from the same branch at any time.
 
-If a branch was created with wrong `.tekton` files, push a fix commit directly to the versioned branch:
+If a branch was created with wrong `.tekton` files, open a PR against the versioned branch to correct them:
 
 ```bash
-git checkout konflux-foreman-3.19
+git checkout foreman-3.19
+git checkout -b fix-tekton-foreman-3.19
 # edit the wrong file
 git commit -m "Fix .tekton pipeline for 3.19"
-git push origin konflux-foreman-3.19
+git push origin fix-tekton-foreman-3.19
+gh pr create --base foreman-3.19 --title "Fix .tekton pipeline for 3.19"
 ```
 
 **Konflux resources are ephemeral** — the Component and ReleasePlan CRs in tenants-config can be freely removed and recreated. To de-register a versioned release from Konflux (e.g., after a bad rollout):
