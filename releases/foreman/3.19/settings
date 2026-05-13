@@ -1,0 +1,12 @@
+# Script configuration for Foreman 3.19 release branching.
+# This is NOT a Kubernetes resource — it is plain shell-style key=value config
+# read by Python via shlex (never exec/eval). See CLAUDE.md for context.
+VERSION=3.19
+BRANCH_NAME=foreman-3.19
+OCI_REPOS="theforeman/foreman-oci-images theforeman/pulp-oci-images theforeman/candlepin-oci-images"
+RELEASE_TAGS="3.19 3.19.0"
+RPM_CHECK_URL=https://yum.theforeman.org/releases/3.19/el9/x86_64/repodata/repomd.xml
+RPM_CHECK_TIMEOUT=14400
+KATELLO_VERSION=4.15
+CANDLEPIN_VERSION=4.7
+CANDLEPIN_VERSION_XYZ=4.7.4

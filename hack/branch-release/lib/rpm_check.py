@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import argparse
 import logging
-import socket
 import sys
 import time
 import urllib.error
@@ -67,7 +66,7 @@ def wait_for_rpms(url: str, timeout: int, interval: int, dry_run: bool) -> None:
                 status_code = resp.status
         except urllib.error.HTTPError as exc:
             status_code = exc.code
-        except (urllib.error.URLError, socket.timeout, OSError) as exc:
+        except (urllib.error.URLError, OSError) as exc:
             logger.warning("Connection error: %s. Retrying in %ds...", exc, interval)
 
         if status_code == 200:

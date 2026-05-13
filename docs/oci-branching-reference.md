@@ -210,10 +210,10 @@ When a new Foreman version (e.g., `3.19`) is released, a versioned branch is
 created in each OCI image repository. The branch follows the pattern:
 
 ```
-konflux-foreman-<VERSION>
+foreman-<VERSION>
 ```
 
-Examples: `konflux-foreman-3.19`, `konflux-foreman-3.20`.
+Examples: `foreman-3.19`, `foreman-3.20`.
 
 The Konflux Component name for the versioned build follows the pattern:
 
@@ -225,109 +225,42 @@ Examples: `foreman-3.19`, `foreman-proxy-3.19`, `pulp-3.19`, `candlepin-3.19`.
 
 ---
 
-## Exact diff specification: nightly to versioned branch
+## .tekton file management: Konflux owns this
 
-The following fields change when the nightly `.tekton` files are transformed into
-versioned branch files. All other content (task bundles, workspaces, pipeline
-parameters, SAST tasks, etc.) remains identical.
+The branching scripts do **not** generate, template, or patch `.tekton` files.
 
-Using `foreman` component and version `3.19` as the canonical example; the same
-pattern applies to `foreman-proxy`, `pulp`, and `candlepin` with their respective
-image and service-account names.
+**Precondition:** nightly branches are always assumed to be working before a
+release branch is cut. If nightly CI is broken, the release engineer raises it
+in the release call and waits for the responsible team to fix it — branching a
+broken nightly is not permitted.
 
-### Push pipeline (`foreman-develop-push.yaml` → `foreman-3.19-push.yaml`)
+**Branching flow:**
 
-```diff
--    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
--      == "master" && ( "images/foreman/***".pathChanged() || ".tekton/foreman-develop-push.yaml".pathChanged()
--      )
-+    pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-+      == "konflux-foreman-3.19" && ( "images/foreman/***".pathChanged() || ".tekton/foreman-3.19-push.yaml".pathChanged()
-+      )
+1. The versioned branch (e.g. `foreman-3.19`) is created from the nightly
+   default branch. The existing `.tekton` files come along as-is — they are
+   already correct and passing CI.
+2. The Component manifest for the versioned release is applied to tenants-config
+   (issue #29).
+3. Konflux detects the new Component and automatically opens a PR on the versioned
+   branch to update the `.tekton` files (target branch CEL expression, component
+   name, service account, etc.) and takes over managing them from that point forward.
 
--    appstudio.openshift.io/component: foreman-develop
-+    appstudio.openshift.io/component: foreman-3.19
+The branching script is only responsible for:
+- Creating the git branch
+- Patching `Containerfile` ARG defaults to pin the release version
+- Committing, pushing, and opening a draft PR for human review
 
--  name: foreman-develop-on-push
-+  name: foreman-3.19-on-push
-
--  - name: output-image
--    value: quay.io/foreman/foreman-stage:{{revision}}
-+  - name: output-image
-+    value: quay.io/foreman/foreman-stage:{{revision}}   # unchanged; staging tag is always {{revision}}
-
--  taskRunTemplate:
--    serviceAccountName: build-pipeline-foreman-develop
-+  taskRunTemplate:
-+    serviceAccountName: build-pipeline-foreman-3.19
-```
-
-**Build args** — the Containerfile `ARG` defaults are overridden at the pipeline
-level via the `build-args` parameter:
-
-```diff
-+  - name: build-args
-+    value:
-+    - FOREMAN_VERSION=3.19
-+    - KATELLO_VERSION=4.15   # the Katello version paired with Foreman 3.19
-```
-
-For `pulp-develop` the build arg becomes:
-
-```diff
-+  - name: build-args
-+    value:
-+    - VERSION=3.19
-```
-
-For `candlepin-develop` the build args become:
-
-```diff
-+  - name: build-args
-+    value:
-+    - VERSION=4.7
-+    - VERSION_XYZ=4.7.4
-```
-
-Note: the Candlepin version is not derived from the Foreman version; it must be
-looked up separately for each release.
-
-### PR pipeline (`foreman-develop-pull-request.yaml` → `foreman-3.19-pull-request.yaml`)
-
-The same substitutions apply as for the push pipeline, plus:
-
-```diff
--    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
--      == "master" && ( "images/foreman/***".pathChanged() || ".tekton/foreman-develop-pull-request.yaml".pathChanged()
--      )
-+    pipelinesascode.tekton.dev/on-cel-expression: event == "pull_request" && target_branch
-+      == "konflux-foreman-3.19" && ( "images/foreman/***".pathChanged() || ".tekton/foreman-3.19-pull-request.yaml".pathChanged()
-+      )
-
--  - name: output-image
--    value: quay.io/foreman/foreman-stage:on-pr-{{revision}}
-+  - name: output-image
-+    value: quay.io/foreman/foreman-stage:on-pr-{{revision}}   # unchanged
-
--  name: foreman-develop-on-pull-request
-+  name: foreman-3.19-on-pull-request
-```
-
-### Summary of changed fields per file
+**What Konflux updates automatically** (for reference):
 
 | Field | Nightly value | Versioned value (example: 3.19) |
 |-------|---------------|---------------------------------|
 | `metadata.name` | `foreman-develop-on-push` | `foreman-3.19-on-push` |
 | `appstudio.openshift.io/component` | `foreman-develop` | `foreman-3.19` |
-| CEL `target_branch` | `master` (or `main` for pulp) | `konflux-foreman-3.19` |
+| CEL `target_branch` | `master` (or `main` for pulp) | `foreman-3.19` |
 | CEL `.tekton` file reference | `foreman-develop-push.yaml` | `foreman-3.19-push.yaml` |
 | `taskRunTemplate.serviceAccountName` | `build-pipeline-foreman-develop` | `build-pipeline-foreman-3.19` |
 | `build-args` | _(not set; uses Containerfile defaults)_ | `FOREMAN_VERSION=3.19` (and `KATELLO_VERSION`) |
-| `output-image` staging tag | `quay.io/foreman/foreman-stage:{{revision}}` | `quay.io/foreman/foreman-stage:{{revision}}` (unchanged) |
-
-The `output-image` staging tag does **not** change — it always uses `{{revision}}`
-as the tag. The public tag (`nightly` vs `3.19`) is applied by the Konflux
-release pipeline, not by the `.tekton` file.
+| `output-image` staging tag | `quay.io/foreman/foreman-stage:{{revision}}` | unchanged |
 
 ---
 
@@ -346,15 +279,7 @@ quay.io/foreman/tekton-catalog/task-buildah-oci-ta@sha256:<digest>
 > reference the upstream `quay.io/konflux-ci/tekton-catalog/task-buildah-oci-ta`
 > bundle. Migrating all repos to the custom bundle is tracked in issue #40.
 
-When the upstream `pipeline-push-to-external-registry` bundle schema changes
-(new parameters, renamed tasks, etc.):
-
-1. Update the digest in the Jinja2 template at
-   `hack/branch-release/templates/` in this repository (planned infrastructure,
-   to be created by issues #26–#28).
-2. Regenerate all versioned `.tekton` files from the updated template.
-3. Open a PR to each affected OCI image repository to land the updated files on
-   the versioned branches.
-
-Do not update individual versioned files by hand — always regenerate from the
-template to keep all branches consistent.
+When the custom bundle digest changes, open a PR to each affected OCI image
+repository (nightly and all versioned branches) to update the digest. Use
+`skopeo inspect` to get the current digest — see the main CLAUDE.md for the
+exact command.
