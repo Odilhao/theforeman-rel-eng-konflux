@@ -16,9 +16,11 @@ if str(_BR) not in sys.path:
 
 from lib.config import ReleaseConfig  # noqa: E402
 from lib.tenants import (  # noqa: E402
+    _PROJECTS,
     _insert_resource_entry,
     generate_component_overlay,
     generate_releaseplan_overlay,
+    project_for_repo,
     update_parent_kustomizations,
 )
 
@@ -36,6 +38,7 @@ SAMPLE_CONFIG = ReleaseConfig(
 
 # Parent kustomization.yaml content as it would exist in tenants-config before branching.
 _PARENT_COMPONENTS_KUSTOMIZATION = """\
+---
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
@@ -68,7 +71,7 @@ class TestGenerateComponentOverlay(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)
         tenant_path = _make_tenant_tree(Path(tmp))
-        generate_component_overlay(SAMPLE_CONFIG, tenant_path, dry_run=False)
+        generate_component_overlay(SAMPLE_CONFIG, _PROJECTS["foreman-oci-images"], tenant_path, dry_run=False)
 
         overlay_dir = tenant_path / "components" / "3.19"
         kust = overlay_dir / "kustomization.yaml"
@@ -85,7 +88,6 @@ class TestGenerateComponentOverlay(unittest.TestCase):
         self.assertTrue(comp_text.startswith("---"), "components.yaml must start with ---")
         self.assertIn("foreman-3.19", comp_text)
         self.assertIn("foreman-proxy-3.19", comp_text)
-        self.assertIn("foreman-3.19", comp_text)  # name: foreman-3.19
         self.assertIn("revision: foreman-3.19", comp_text)
         self.assertIn("quay.io/foreman/foreman-stage", comp_text)
         self.assertIn("quay.io/foreman/foreman-proxy-stage", comp_text)
@@ -97,9 +99,9 @@ class TestGenerateComponentOverlay(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)
         tenant_path = _make_tenant_tree(Path(tmp))
-        generate_component_overlay(SAMPLE_CONFIG, tenant_path, dry_run=False)
+        generate_component_overlay(SAMPLE_CONFIG, _PROJECTS["foreman-oci-images"], tenant_path, dry_run=False)
         # Second call must not raise and content must remain unchanged.
-        generate_component_overlay(SAMPLE_CONFIG, tenant_path, dry_run=False)
+        generate_component_overlay(SAMPLE_CONFIG, _PROJECTS["foreman-oci-images"], tenant_path, dry_run=False)
 
         comp_text = (tenant_path / "components" / "3.19" / "components.yaml").read_text()
         self.assertIn("foreman-3.19", comp_text)
@@ -108,7 +110,7 @@ class TestGenerateComponentOverlay(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)
         tenant_path = _make_tenant_tree(Path(tmp))
-        generate_component_overlay(SAMPLE_CONFIG, tenant_path, dry_run=True)
+        generate_component_overlay(SAMPLE_CONFIG, _PROJECTS["foreman-oci-images"], tenant_path, dry_run=True)
 
         overlay_dir = tenant_path / "components" / "3.19"
         self.assertFalse((overlay_dir / "kustomization.yaml").exists())
@@ -121,7 +123,7 @@ class TestGenerateReleaseplanOverlay(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)
         tenant_path = _make_tenant_tree(Path(tmp))
-        generate_releaseplan_overlay(SAMPLE_CONFIG, tenant_path, dry_run=False)
+        generate_releaseplan_overlay(SAMPLE_CONFIG, _PROJECTS["foreman-oci-images"], tenant_path, dry_run=False)
 
         overlay_dir = tenant_path / "releaseplans" / "3.19"
         kust = overlay_dir / "kustomization.yaml"
@@ -138,6 +140,7 @@ class TestGenerateReleaseplanOverlay(unittest.TestCase):
         self.assertNotIn("foreman-stage", text, "production image must not have -stage suffix")
         self.assertIn("../base", text)
         self.assertIn('suffix: "-3.19"', text)
+        self.assertNotIn("singleComponentMode", text, "foreman project must not have singleComponentMode")
 
     def test_tags_come_from_release_tags(self) -> None:
         tmp = tempfile.mkdtemp()
@@ -155,7 +158,7 @@ class TestGenerateReleaseplanOverlay(unittest.TestCase):
             candlepin_version_xyz="4.8.0",
         )
         (tmp_path / "releaseplans").mkdir(parents=True)
-        generate_releaseplan_overlay(cfg, tmp_path, dry_run=False)
+        generate_releaseplan_overlay(cfg, _PROJECTS["foreman-oci-images"], tmp_path, dry_run=False)
 
         text = (tmp_path / "releaseplans" / "3.20" / "kustomization.yaml").read_text()
         self.assertIn('"3.20"', text)
@@ -166,7 +169,7 @@ class TestGenerateReleaseplanOverlay(unittest.TestCase):
         tmp = tempfile.mkdtemp()
         self.addCleanup(shutil.rmtree, tmp, True)
         tenant_path = _make_tenant_tree(Path(tmp))
-        generate_releaseplan_overlay(SAMPLE_CONFIG, tenant_path, dry_run=True)
+        generate_releaseplan_overlay(SAMPLE_CONFIG, _PROJECTS["foreman-oci-images"], tenant_path, dry_run=True)
 
         overlay_dir = tenant_path / "releaseplans" / "3.19"
         self.assertFalse((overlay_dir / "kustomization.yaml").exists())
@@ -224,8 +227,8 @@ class TestUpdateParentKustomizations(unittest.TestCase):
 
 class TestInsertResourceEntryFallback(unittest.TestCase):
 
-    def test_raises_when_no_resource_entries(self) -> None:
-        """_insert_resource_entry must raise RuntimeError when resources block is empty."""
+    def test_empty_resources_block_inserts_correctly(self) -> None:
+        """Empty resources: block (no entries) must accept insertion without error."""
         content = """\
 ---
 apiVersion: kustomize.config.k8s.io/v1beta1
@@ -233,25 +236,116 @@ kind: Kustomization
 resources:
 namespace: theforeman-org-tenant
 """
+        result = _insert_resource_entry(content, "3.19")
+        self.assertIn("  - 3.19/", result)
+        self.assertIn("namespace: theforeman-org-tenant", result)
+
+    def test_raises_when_no_resources_key(self) -> None:
+        """_insert_resource_entry must raise RuntimeError when there is no resources: key."""
+        content = """\
+---
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: theforeman-org-tenant
+"""
         with self.assertRaises(RuntimeError) as ctx:
             _insert_resource_entry(content, "3.19")
-        self.assertIn("no existing resource entries", str(ctx.exception))
+        self.assertIn("no resources: block found", str(ctx.exception))
         self.assertIn("Manual edit required", str(ctx.exception))
 
+    def test_does_not_insert_into_patches_block(self) -> None:
+        """New entry must appear inside resources:, not after patches: or other arrays."""
+        content = "resources:\n  - develop/\npatches:\n  - path: foo.yaml\n"
+        result = _insert_resource_entry(content, "3.19")
+        self.assertEqual(result.count("  - 3.19/"), 1)
+        # Must appear before patches:, not after
+        resources_pos = result.index("resources:")
+        patches_pos = result.index("patches:")
+        new_entry_pos = result.index("  - 3.19/")
+        self.assertLess(resources_pos, new_entry_pos)
+        self.assertLess(new_entry_pos, patches_pos)
 
-# --- pytest-style tests using tmp_path fixture ---
+
+class TestGeneratePulpOverlay(unittest.TestCase):
+
+    def test_creates_pulp_component(self) -> None:
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        tmp_path = Path(tmp)
+        (tmp_path / "components").mkdir(parents=True)
+        generate_component_overlay(SAMPLE_CONFIG, _PROJECTS["pulp-oci-images"], tmp_path, dry_run=False)
+
+        comp_text = (tmp_path / "components" / "3.19" / "components.yaml").read_text()
+        self.assertIn("pulp-3.19", comp_text)
+        self.assertIn("images/pulp/Containerfile", comp_text)
+        self.assertNotIn("name: foreman-3.19", comp_text)
+        self.assertNotIn("componentName: foreman-3.19", comp_text)
+
+    def test_creates_pulp_releaseplan_with_single_component_mode(self) -> None:
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        tmp_path = Path(tmp)
+        (tmp_path / "releaseplans").mkdir(parents=True)
+        generate_releaseplan_overlay(SAMPLE_CONFIG, _PROJECTS["pulp-oci-images"], tmp_path, dry_run=False)
+
+        text = (tmp_path / "releaseplans" / "3.19" / "kustomization.yaml").read_text()
+        self.assertIn("singleComponentMode: true", text)
+        self.assertIn("pulp-3.19", text)
+        self.assertIn("quay.io/foreman/pulp\n", text)
+        self.assertNotIn("pulp-stage", text)
+
+
+class TestGenerateCandlepinOverlay(unittest.TestCase):
+
+    def test_creates_candlepin_component(self) -> None:
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        tmp_path = Path(tmp)
+        (tmp_path / "components").mkdir(parents=True)
+        generate_component_overlay(SAMPLE_CONFIG, _PROJECTS["candlepin-oci-images"], tmp_path, dry_run=False)
+
+        comp_text = (tmp_path / "components" / "3.19" / "components.yaml").read_text()
+        self.assertIn("candlepin-3.19", comp_text)
+        self.assertNotIn("name: foreman-3.19", comp_text)
+        self.assertNotIn("componentName: foreman-3.19", comp_text)
+
+    def test_creates_candlepin_releaseplan_with_single_component_mode(self) -> None:
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        tmp_path = Path(tmp)
+        (tmp_path / "releaseplans").mkdir(parents=True)
+        generate_releaseplan_overlay(SAMPLE_CONFIG, _PROJECTS["candlepin-oci-images"], tmp_path, dry_run=False)
+
+        text = (tmp_path / "releaseplans" / "3.19" / "kustomization.yaml").read_text()
+        self.assertIn("singleComponentMode: true", text)
+        self.assertIn("candlepin-3.19", text)
+        self.assertIn("quay.io/foreman/candlepin\n", text)
+        self.assertNotIn("candlepin-stage", text)
+
+
+# --- pytest-style tests ---
+
+
+def test_project_for_repo_known() -> None:
+    p = project_for_repo("theforeman/pulp-oci-images")
+    assert p.app_name == "pulp"
+
+
+def test_project_for_repo_unknown_raises() -> None:
+    with pytest.raises(KeyError):
+        project_for_repo("theforeman/unknown-repo")
 
 
 def test_generate_component_overlay_creates_files(tmp_path: Path) -> None:
     tenant_path = _make_tenant_tree(tmp_path)
-    generate_component_overlay(SAMPLE_CONFIG, tenant_path, dry_run=False)
+    generate_component_overlay(SAMPLE_CONFIG, _PROJECTS["foreman-oci-images"], tenant_path, dry_run=False)
     assert (tenant_path / "components" / "3.19" / "kustomization.yaml").exists()
     assert (tenant_path / "components" / "3.19" / "components.yaml").exists()
 
 
 def test_generate_releaseplan_overlay_creates_file(tmp_path: Path) -> None:
     tenant_path = _make_tenant_tree(tmp_path)
-    generate_releaseplan_overlay(SAMPLE_CONFIG, tenant_path, dry_run=False)
+    generate_releaseplan_overlay(SAMPLE_CONFIG, _PROJECTS["foreman-oci-images"], tenant_path, dry_run=False)
     assert (tenant_path / "releaseplans" / "3.19" / "kustomization.yaml").exists()
 
 
@@ -266,7 +360,7 @@ def test_update_parent_kustomizations_idempotent(tmp_path: Path) -> None:
 @pytest.mark.parametrize("dry_run", [True, False])
 def test_component_overlay_dry_run_param(tmp_path: Path, dry_run: bool) -> None:
     tenant_path = _make_tenant_tree(tmp_path)
-    generate_component_overlay(SAMPLE_CONFIG, tenant_path, dry_run=dry_run)
+    generate_component_overlay(SAMPLE_CONFIG, _PROJECTS["foreman-oci-images"], tenant_path, dry_run=dry_run)
     overlay_exists = (tenant_path / "components" / "3.19" / "components.yaml").exists()
     if dry_run:
         assert not overlay_exists
