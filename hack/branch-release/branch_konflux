@@ -1,0 +1,481 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.9"
+# dependencies = []
+# ///
+"""
+branch_konflux — Orchestrator for branching a new Foreman release in Konflux.
+
+Usage:
+    uv run hack/branch-release/branch_konflux --version=3.19 --dry-run
+
+Configuration:
+    Copy hack/branch-release/settings.example to hack/branch-release/settings.local
+    and fill in your values. Environment variables set in your shell take
+    precedence over settings.local.
+
+Required (env var or settings.local):
+    GITHUB_USER   Your GitHub username — must have forks of the OCI image repos
+    GITLAB_USER   Your gitlab.com username — must have a fork of tenants-config
+
+Optional (env var or settings.local):
+    WORKTREE_DIR         Base directory for temporary worktrees (default: /tmp)
+    GITHUB_FORK_URL_BASE GitHub fork URL prefix (default: https://github.com/$GITHUB_USER)
+    GITLAB_FORK_URL_BASE GitLab fork URL prefix (default: https://gitlab.com/$GITLAB_USER)
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import shlex
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+# Allow importing lib/ from the same directory as this script.
+_SCRIPT_DIR = Path(__file__).parent
+sys.path.insert(0, str(_SCRIPT_DIR))
+
+
+def _load_user_settings() -> None:
+    """Load settings.local into os.environ if the file exists.
+
+    Environment variables already set in the shell take precedence.
+    The file uses the same shell key=value format as release settings files.
+    """
+    settings_path = _SCRIPT_DIR / "settings.local"
+    if not settings_path.exists():
+        return
+    raw = settings_path.read_text()
+    for token in shlex.split(raw, comments=True):
+        if "=" in token:
+            key, _, value = token.partition("=")
+            key = key.strip()
+            if key and key not in os.environ:
+                os.environ[key] = value.strip()
+
+
+_load_user_settings()
+
+from lib.config import ReleaseConfig, load_config  # noqa: E402
+from lib.containerfile import patch_arg  # noqa: E402
+from lib.git import (  # noqa: E402
+    branch_exists_remote,
+    clone_repo,
+    commit_all,
+    create_branch,
+    detect_default_branch,
+    push_branch,
+)
+from lib.github import open_pr, validate_fork  # noqa: E402
+from lib.gitlab import open_mr  # noqa: E402
+from lib.gitlab import validate_fork as gitlab_validate_fork  # noqa: E402
+from lib.rpm_check import wait_for_rpms  # noqa: E402
+from lib.runner import Step, StepRunner  # noqa: E402
+from lib.subprocess_helpers import run as _run  # noqa: E402
+from lib.tenants import (  # noqa: E402
+    generate_component_overlay,
+    generate_releaseplan_overlay,
+    project_for_repo,
+    update_parent_kustomizations,
+)
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
+
+_TENANTS_CONFIG_UPSTREAM = "https://gitlab.com/fedora/infrastructure/konflux/tenants-config.git"
+_TENANTS_NAMESPACE = "theforeman-org-tenant"
+_TENANTS_PATH_IN_REPO = Path("clusters/kflux-fedora-01/tenants/theforeman-org-tenant")
+
+# Per-repo Containerfile ARG patches:
+#   {repo_name: [(containerfile_rel_path, arg_name, config_attr), ...]}
+_CONTAINERFILE_PATCHES: dict[str, list[tuple[str, str, str]]] = {
+    "foreman-oci-images": [
+        ("images/foreman/Containerfile", "FOREMAN_VERSION", "version"),
+        ("images/foreman/Containerfile", "KATELLO_VERSION", "katello_version"),
+        ("images/foreman-proxy/Containerfile", "FOREMAN_VERSION", "version"),
+    ],
+    "candlepin-oci-images": [
+        ("images/candlepin/Containerfile", "CANDLEPIN_VERSION", "candlepin_version"),
+        ("images/candlepin/Containerfile", "CANDLEPIN_VERSION_XYZ", "candlepin_version_xyz"),
+    ],
+    "pulp-oci-images": [],  # no pinned version ARG to patch
+}
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _require_env(name: str) -> str:
+    """Return the value of environment variable *name*, or exit with an error."""
+    value = os.environ.get(name)
+    if not value:
+        print(
+            f"ERROR: Required environment variable {name!r} is not set.\n"
+            f"  Set it in your shell:  export {name}=<value>\n"
+            f"  Or add it to:          hack/branch-release/settings.local",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    return value
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="branch_konflux",
+        description=(
+            "Branch a new Foreman release across OCI image repos and tenants-config."
+        ),
+    )
+    parser.add_argument(
+        "--version",
+        required=True,
+        metavar="VERSION",
+        help="Release version in MAJOR.MINOR format (e.g. 3.19)",
+    )
+    parser.add_argument(
+        "--auto",
+        action="store_true",
+        default=False,
+        help="Non-interactive: skip all confirmation prompts",
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        default=False,
+        help="Print actions without making any remote changes",
+    )
+    parser.add_argument(
+        "--skip-rpm-check",
+        action="store_true",
+        default=False,
+        help="Skip the wait-rpms step (useful when RPMs are not yet published)",
+    )
+    parser.add_argument(
+        "--recreate",
+        action="store_true",
+        default=False,
+        help="Delete and recreate an existing branch instead of skipping",
+    )
+    parser.add_argument(
+        "--step",
+        metavar="STEP",
+        default=None,
+        help="Resume from named step (skips all prior steps)",
+    )
+    parser.add_argument(
+        "--worktree-dir",
+        metavar="DIR",
+        default=None,
+        help="Override temporary worktree base directory (default: /tmp/konflux-branch-<VERSION>)",
+    )
+    return parser.parse_args()
+
+
+def _pr_body(config: ReleaseConfig) -> str:
+    return (
+        f"Branch `{config.branch_name}` for Foreman {config.version} release.\n\n"
+        f"This PR patches Containerfile ARG values to pin the release version.\n\n"
+        f"Part of the Foreman {config.version} Konflux branching process.\n"
+    )
+
+
+def _mr_body(config: ReleaseConfig) -> str:
+    return (
+        f"Register Konflux Component and ReleasePlan resources for "
+        f"Foreman {config.version} (`{config.branch_name}`).\n\n"
+        f"**Merge after:**\n"
+        f"- OCI repo PRs for `{config.branch_name}` have been merged\n"
+        f"- RPMs are available at `{config.rpm_check_url}`\n"
+    )
+
+
+def _print_summary(step_results: list[tuple[str, object]], config: ReleaseConfig) -> None:
+    bar = "━" * 38
+    print(f"\n{bar}")
+    print(f" Foreman {config.version} branching complete")
+    print(bar)
+
+    url_results = [
+        (name, result)
+        for name, result in step_results
+        if isinstance(result, str) and result.startswith(("http", "[dry-run"))
+    ]
+
+    if url_results:
+        print("\nOpened PRs/MRs:")
+        for name, url in url_results:
+            print(f"  {name}: {url}")
+
+    print(f"""
+Next steps:
+  1. Review and merge the OCI repo PRs
+  2. Wait for RPMs at {config.rpm_check_url}
+  3. Merge the tenants-config MR
+  4. Verify first {config.version} build in Konflux UI
+""")
+
+
+# ---------------------------------------------------------------------------
+# Step implementations
+# ---------------------------------------------------------------------------
+
+
+def _step_preflight(
+    config: ReleaseConfig,
+    github_user: str,
+    gitlab_user: str,
+    dry_run: bool,
+) -> None:
+    """Validate tools, forks, and remote collision."""
+    required_tools = ["git", "gh", "glab", "yq", "jq", "kustomize", "oc"]
+    missing_tools: list[str] = []
+    for tool in required_tools:
+        if shutil.which(tool):
+            print(f"  [ok] {tool}")
+        else:
+            print(f"  [MISSING] {tool}", file=sys.stderr)
+            missing_tools.append(tool)
+
+    if missing_tools:
+        print(
+            f"\nERROR: Missing required tools: {', '.join(missing_tools)}\n"
+            "Install them before running branch_konflux.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+
+    if not dry_run:
+        for repo in config.oci_repos:
+            print(f"  Checking GitHub fork: {github_user}/{repo.split('/')[-1]} ...", end=" ")
+            validate_fork(repo, github_user)
+            print("ok")
+
+        print(f"  Checking GitLab fork: {gitlab_user}/tenants-config ...", end=" ")
+        gitlab_validate_fork("fedora/infrastructure/konflux/tenants-config", gitlab_user)
+        print("ok")
+
+        # Collision check: warn if the versioned component already exists in Konflux.
+        try:
+            _run(
+                ["oc", "get", "component", f"foreman-{config.version}", "-n", _TENANTS_NAMESPACE],
+                capture=True,
+            )
+            print(
+                f"\n  WARNING: Component 'foreman-{config.version}' already exists in namespace "
+                f"'{_TENANTS_NAMESPACE}'.\n"
+                "  The branch-tenants step may produce duplicate resources. "
+                "Proceed with caution.",
+                file=sys.stderr,
+            )
+        except subprocess.CalledProcessError:
+            # Component does not exist — expected for a fresh branch.
+            pass
+    else:
+        for repo in config.oci_repos:
+            print(f"[dry-run] Would check GitHub fork: {github_user}/{repo.split('/')[-1]}")
+        print(f"[dry-run] Would check GitLab fork: {gitlab_user}/tenants-config")
+        print(f"[dry-run] Would run: oc get component foreman-{config.version} -n {_TENANTS_NAMESPACE}")
+
+
+def _step_branch_oci(
+    config: ReleaseConfig,
+    repo: str,
+    worktree: Path,
+    github_user: str,
+    dry_run: bool,
+    recreate: bool,
+) -> str:
+    """Clone repo, create release branch, patch Containerfiles, push, open PR."""
+    from lib.subprocess_helpers import dry_print as _dry_print
+
+    repo_name = repo.split("/")[-1]
+    upstream_url = f"https://github.com/{repo}.git"
+    fork_base = os.environ.get("GITHUB_FORK_URL_BASE", f"https://github.com/{github_user}")
+    fork_url = f"{fork_base.rstrip('/')}/{repo_name}.git"
+
+    default_branch = detect_default_branch(repo)
+    print(f"  Default branch for {repo}: {default_branch}")
+
+    clone_repo(upstream_url, fork_url, worktree, dry_run)
+
+    # Check whether the branch already exists on upstream.
+    # branch_exists_remote requires a live worktree, so skip in dry-run and just show intent.
+    if dry_run:
+        print(f"[dry-run] Would check if branch {config.branch_name} exists on upstream")
+        if recreate:
+            _dry_print(["git", "push", "upstream", "--delete", config.branch_name], cwd=worktree)
+        branch_exists = False
+    else:
+        branch_exists = branch_exists_remote("upstream", config.branch_name, worktree)
+
+    if branch_exists and recreate:
+        print(f"  Branch {config.branch_name!r} exists on upstream — deleting (--recreate).")
+        _run(["git", "push", "upstream", "--delete", config.branch_name], cwd=worktree)
+        branch_exists = False  # reset so we proceed with create + push
+    elif branch_exists and not recreate:
+        print(f"  Branch {config.branch_name!r} already exists — skipping push. Opening/finding PR.")
+
+    if not branch_exists:
+        create_branch(config.branch_name, f"upstream/{default_branch}", worktree, dry_run)
+
+        # Apply Containerfile patches.
+        patches = _CONTAINERFILE_PATCHES.get(repo_name, [])
+        any_patched = False
+        for rel_path, arg_name, config_attr in patches:
+            containerfile = worktree / rel_path
+            new_value = getattr(config, config_attr)
+            if dry_run:
+                print(f"[dry-run] Would patch {containerfile}: ARG {arg_name}={new_value!r}")
+                any_patched = True
+            else:
+                patched = patch_arg(containerfile, arg_name, new_value, dry_run=False)
+                if patched:
+                    any_patched = True
+
+        if any_patched:
+            commit_all(f"Branch {config.branch_name}: patch Containerfile versions", worktree, dry_run)
+
+        push_branch("origin", config.branch_name, worktree, dry_run)
+
+    # open_pr is idempotent — it returns the existing PR URL if one already exists.
+    pr_url = open_pr(
+        title=f"Branch: {config.branch_name}",
+        body=_pr_body(config),
+        base_branch=default_branch,
+        head=f"{github_user}:{config.branch_name}",
+        draft=True,
+        cwd=worktree,
+        dry_run=dry_run,
+    )
+    print(f"  PR: {pr_url}")
+    return pr_url
+
+
+def _step_wait_rpms(config: ReleaseConfig, skip: bool, dry_run: bool) -> None:
+    """Poll RPM check URL until RPMs are available, or skip if requested."""
+    if skip:
+        print("Skipping RPM check (--skip-rpm-check).")
+        return
+    wait_for_rpms(
+        url=config.rpm_check_url,
+        timeout=config.rpm_check_timeout,
+        interval=60,
+        dry_run=dry_run,
+    )
+
+
+def _step_branch_tenants(
+    config: ReleaseConfig,
+    worktree: Path,
+    gitlab_user: str,
+    dry_run: bool,
+) -> str:
+    """Clone tenants-config, generate overlays, push, open MR."""
+    fork_base = os.environ.get("GITLAB_FORK_URL_BASE", f"https://gitlab.com/{gitlab_user}")
+    fork_url = f"{fork_base.rstrip('/')}/tenants-config.git"
+
+    clone_repo(_TENANTS_CONFIG_UPSTREAM, fork_url, worktree, dry_run)
+
+    branch_name = f"branch-{config.branch_name}"
+    # tenants-config upstream branch is always "main" — it's a known repo with a stable default.
+    create_branch(branch_name, "upstream/main", worktree, dry_run)
+
+    for repo in config.oci_repos:
+        project = project_for_repo(repo)
+        tenant_path = worktree / _TENANTS_PATH_IN_REPO / project.app_name
+        generate_component_overlay(config, project, tenant_path, dry_run)
+        generate_releaseplan_overlay(config, project, tenant_path, dry_run)
+        update_parent_kustomizations(config, tenant_path, dry_run)
+
+    commit_all(
+        f"Add {config.branch_name} Components and ReleasePlans",
+        worktree,
+        dry_run,
+    )
+    push_branch("origin", branch_name, worktree, dry_run)
+
+    mr_url = open_mr(
+        title=f"Branch {config.branch_name}: register Konflux components",
+        body=_mr_body(config),
+        target_branch="main",
+        source_branch=branch_name,
+        cwd=worktree,
+        dry_run=dry_run,
+    )
+    print(f"  MR: {mr_url}")
+    return mr_url
+
+
+# ---------------------------------------------------------------------------
+# Entry point
+# ---------------------------------------------------------------------------
+
+
+def main() -> None:
+    args = _parse_args()
+    github_user = _require_env("GITHUB_USER")
+    gitlab_user = _require_env("GITLAB_USER")
+    config = load_config(args.version)
+    if args.worktree_dir:
+        worktree_base = Path(args.worktree_dir)
+    else:
+        base_dir = os.environ.get("WORKTREE_DIR", "/tmp")
+        worktree_base = Path(base_dir) / f"konflux-branch-{config.version}"
+    # Track whether we created the directory so we don't delete a pre-existing path on cleanup.
+    worktree_created_by_us = not worktree_base.exists()
+
+    runner = StepRunner(dry_run=args.dry_run, auto=args.auto, resume_from=args.step)
+
+    runner.add_step(
+        Step("preflight", lambda: _step_preflight(config, github_user, gitlab_user, args.dry_run))
+    )
+
+    for repo in config.oci_repos:
+        repo_name = repo.split("/")[-1]
+        worktree = worktree_base / repo_name
+        runner.add_step(
+            Step(
+                f"branch-oci-{repo_name}",
+                lambda r=repo, wt=worktree: _step_branch_oci(
+                    config, r, wt, github_user, args.dry_run, args.recreate
+                ),
+            )
+        )
+
+    runner.add_step(
+        Step("wait-rpms", lambda: _step_wait_rpms(config, args.skip_rpm_check, args.dry_run))
+    )
+
+    tenants_worktree = worktree_base / "tenants-config"
+    runner.add_step(
+        Step(
+            "branch-tenants",
+            lambda: _step_branch_tenants(config, tenants_worktree, gitlab_user, args.dry_run),
+        )
+    )
+
+    try:
+        step_results = runner.run()
+    except Exception as exc:
+        print(f"\nERROR: {exc}", file=sys.stderr)
+        print(f"Worktree left at: {worktree_base}", file=sys.stderr)
+        print(f"Clean up with: rm -rf {worktree_base}", file=sys.stderr)
+        sys.exit(1)
+
+    # Clean up worktrees on success — only if this run created the directory.
+    if not args.dry_run and worktree_created_by_us and worktree_base.exists():
+        shutil.rmtree(worktree_base)
+        print(f"\nCleaned up {worktree_base}")
+    elif not args.dry_run and worktree_base.exists():
+        print(f"\nWorktree left at: {worktree_base} (pre-existing directory, not removed)")
+
+    _print_summary(step_results, config)
+
+
+if __name__ == "__main__":
+    main()

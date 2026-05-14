@@ -14,6 +14,29 @@ from lib.subprocess_helpers import dry_print as _dry_print
 from lib.subprocess_helpers import run as _run
 
 
+def clone_repo(upstream_url: str, fork_url: str, dest: Path, dry_run: bool) -> None:
+    """Clone upstream_url to dest with remote named 'upstream'; add fork_url as 'origin'.
+
+    Parameters
+    ----------
+    upstream_url:
+        URL of the upstream repository to clone (becomes the 'upstream' remote).
+    fork_url:
+        URL of the personal fork to add as the 'origin' remote.
+    dest:
+        Destination path for the clone.
+    dry_run:
+        If True, print the commands without executing them.
+    """
+    clone_cmd = ["git", "clone", "--origin", "upstream", upstream_url, str(dest)]
+    if dry_run:
+        _dry_print(clone_cmd)
+        _dry_print(["git", "remote", "add", "origin", fork_url], cwd=dest)
+        return
+    _run(clone_cmd)
+    _run(["git", "remote", "add", "origin", fork_url], cwd=dest)
+
+
 def detect_default_branch(repo: str) -> str:
     """Return the default branch name for *repo* (e.g. 'master' or 'main').
 

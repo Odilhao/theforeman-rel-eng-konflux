@@ -6,6 +6,7 @@ All subprocess calls use subprocess.run([...], check=True) — no shell=True.
 
 from __future__ import annotations
 
+import json
 import re
 import subprocess
 import sys
@@ -15,6 +16,7 @@ from lib.subprocess_helpers import dry_print as _dry_print
 from lib.subprocess_helpers import run as _run
 
 _TENANTS_CONFIG_RE = re.compile(r"(?<![a-z])gitlab\.com[:/]fedora/infrastructure/konflux/tenants-config")
+_GITLAB_HOST = "gitlab.com"
 
 
 def validate_fork(upstream_repo: str, gitlab_user: str) -> None:
@@ -22,7 +24,7 @@ def validate_fork(upstream_repo: str, gitlab_user: str) -> None:
     repo_name = upstream_repo.split("/")[-1]
     fork_repo = f"{gitlab_user}/{repo_name}"
     try:
-        _run(["glab", "repo", "view", fork_repo], capture=True)
+        _run(["glab", "repo", "view", fork_repo, "--hostname", _GITLAB_HOST], capture=True)
     except subprocess.CalledProcessError:
         print(
             f"ERROR: Fork not found: {fork_repo}\n"
@@ -106,13 +108,22 @@ def open_mr(
             "glab", "mr", "list",
             "--source-branch", source_branch,
             "--target-branch", target_branch,
-            "--json", "url",
-            "--jq", ".[0].url",
+            "--hostname", _GITLAB_HOST,
+            "--output", "json",
         ],
         cwd=cwd,
         capture=True,
     )
-    url = existing.stdout.strip()
+    try:
+        data = json.loads(existing.stdout or "[]")
+    except json.JSONDecodeError:
+        print(
+            f"ERROR: glab mr list returned unexpected output: {existing.stdout!r}\n"
+            "Ensure glab is authenticated and targeting the correct host.",
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
+    url = data[0].get("web_url", "") if data else ""
     if url:
         print(f"MR already exists: {url}")
         return url
@@ -123,6 +134,7 @@ def open_mr(
         "--target-branch", target_branch,
         "--title", title,
         "--description", body,
+        "--hostname", _GITLAB_HOST,
     ]
 
     if dry_run:

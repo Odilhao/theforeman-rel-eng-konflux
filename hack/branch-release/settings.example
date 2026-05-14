@@ -1,0 +1,69 @@
+# hack/branch-release/settings.example — local user configuration template
+#
+# Copy this file to settings.local and fill in your values:
+#
+#   cp hack/branch-release/settings.example hack/branch-release/settings.local
+#
+# settings.local is gitignored and never committed. It is loaded by
+# branch_konflux at startup. Environment variables already set in your shell
+# take precedence over values defined here.
+#
+# Format: KEY=value  (shell key=value, no "export" keyword, # comments)
+
+# ---------------------------------------------------------------------------
+# Identity — required
+# ---------------------------------------------------------------------------
+
+# Your GitHub username. You must have personal forks of:
+#   theforeman/foreman-oci-images
+#   theforeman/pulp-oci-images
+#   theforeman/candlepin-oci-images
+#
+# GITHUB_USER=myusername
+
+# Your GitLab username for gitlab.com. You must have a personal fork of:
+#   fedora/infrastructure/konflux/tenants-config
+#
+# Note: if you have multiple GitLab instances configured in glab (e.g.
+# gitlab.com and a self-hosted instance), set this to your gitlab.com
+# username. The scripts always target gitlab.com explicitly via
+# --hostname gitlab.com.
+#
+# GITLAB_USER=myusername
+
+# ---------------------------------------------------------------------------
+# Worktree location — optional
+# ---------------------------------------------------------------------------
+
+# Base directory under which temporary git worktrees are created.
+# The script creates <WORKTREE_DIR>/konflux-branch-<VERSION>/ inside this path.
+#
+# Default: /tmp (creates /tmp/konflux-branch-3.19/)
+#
+# macOS example  : WORKTREE_DIR=/Users/myname/tmp
+# Linux example  : WORKTREE_DIR=/home/myname/dev
+# XDG example    : WORKTREE_DIR=/home/myname/.local/share/konflux
+#
+# WORKTREE_DIR=/tmp
+
+# ---------------------------------------------------------------------------
+# Fork remote URLs — optional
+# ---------------------------------------------------------------------------
+
+# GitHub fork URL base. Used to construct the push remote for OCI image repos.
+# Default: https://github.com/$GITHUB_USER
+#
+# Use the SSH form if you prefer SSH for pushing:
+# GITHUB_FORK_URL_BASE=git@github.com:myusername
+#
+# GITHUB_FORK_URL_BASE=https://github.com/myusername
+
+# GitLab fork URL base. Used to construct the push remote for tenants-config.
+# Default: https://gitlab.com/$GITLAB_USER
+#
+# Use the SSH form if you prefer SSH for pushing:
+# GITLAB_FORK_URL_BASE=git@gitlab.com:myusername
+#
+# GITLAB_FORK_URL_BASE=https://gitlab.com/myusername
+
+# vim: ft=sh
