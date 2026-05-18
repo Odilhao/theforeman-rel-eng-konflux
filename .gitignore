@@ -9,3 +9,6 @@ __pycache__/
 
 # VSCode 'history' extension
 .history/
+
+# Local user settings for hack/branch-release scripts (copy from settings.example)
+hack/branch-release/settings.local

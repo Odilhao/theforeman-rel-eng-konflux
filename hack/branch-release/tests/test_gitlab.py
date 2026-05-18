@@ -122,6 +122,9 @@ class TestValidateFork(unittest.TestCase):
         with patch("lib.gitlab._run", return_value=_run_returning("")) as mock_run:
             validate_fork("fedora/infrastructure/konflux/tenants-config", "myuser")
         mock_run.assert_called_once()
+        call_args = mock_run.call_args[0][0]
+        self.assertIn("--hostname", call_args)
+        self.assertIn("gitlab.com", call_args)
 
     def test_missing_fork_raises(self) -> None:
         import subprocess
@@ -133,21 +136,23 @@ class TestValidateFork(unittest.TestCase):
 
 class TestOpenMr(unittest.TestCase):
 
+    _EXISTING_URL = "https://gitlab.com/myuser/tenants-config/-/merge_requests/42"
+
     def _fake_run_existing(self, existing_url: str):
-        """Return a side_effect callable that returns existing_url on first call, raises on second."""
+        """Return a side_effect callable that returns JSON on first call, raises on second."""
         call_count = {"n": 0}
+        json_response = f'[{{"web_url": "{existing_url}"}}]'
 
         def side_effect(cmd, **kwargs):
             call_count["n"] += 1
             if call_count["n"] == 1:
-                return _run_returning(existing_url)
+                return _run_returning(json_response)
             raise AssertionError("open_mr must not create an MR when one already exists")
 
         return side_effect
 
     def test_returns_existing_mr_url(self) -> None:
-        existing_url = "https://gitlab.com/myuser/tenants-config/-/merge_requests/42"
-        with patch("lib.gitlab._run", side_effect=self._fake_run_existing(existing_url)):
+        with patch("lib.gitlab._run", side_effect=self._fake_run_existing(self._EXISTING_URL)):
             result = open_mr(
                 title="Branch 3.19",
                 body="adds 3.19 overlays",
@@ -156,11 +161,38 @@ class TestOpenMr(unittest.TestCase):
                 cwd=Path("/fake/repo"),
                 dry_run=False,
             )
-        self.assertEqual(result, existing_url)
+        self.assertEqual(result, self._EXISTING_URL)
+
+    def test_idempotency_check_uses_output_json_flag(self) -> None:
+        """Verify the mr list call uses --output json, not --json/--jq (glab-compatible flags)."""
+        captured = {}
+
+        def side_effect(cmd, **kwargs):
+            if "mr" in cmd and "list" in cmd:
+                captured["cmd"] = cmd
+                return _run_returning("[]")
+            return _run_returning("https://gitlab.com/mr/99")
+
+        with patch("lib.gitlab._run", side_effect=side_effect):
+            open_mr(
+                title="Branch 3.19",
+                body="adds 3.19 overlays",
+                target_branch="main",
+                source_branch="branch-3.19",
+                cwd=Path("/fake/repo"),
+                dry_run=False,
+            )
+
+        self.assertIn("--output", captured["cmd"])
+        self.assertIn("json", captured["cmd"])
+        self.assertNotIn("--json", captured["cmd"])
+        self.assertNotIn("--jq", captured["cmd"])
+        self.assertIn("--hostname", captured["cmd"])
+        self.assertIn("gitlab.com", captured["cmd"])
 
     def test_creates_mr_when_none_exists(self) -> None:
         new_url = "https://gitlab.com/myuser/tenants-config/-/merge_requests/99"
-        call_results = [_run_returning(""), _run_returning(new_url)]
+        call_results = [_run_returning("[]"), _run_returning(new_url)]
 
         with patch("lib.gitlab._run", side_effect=call_results):
             result = open_mr(
@@ -174,7 +206,7 @@ class TestOpenMr(unittest.TestCase):
         self.assertEqual(result, new_url)
 
     def test_dry_run_returns_placeholder_and_prints(self) -> None:
-        with patch("lib.gitlab._run", return_value=_run_returning("")):
+        with patch("lib.gitlab._run", return_value=_run_returning("[]")):
             with patch("lib.gitlab._dry_print") as mock_dry_print:
                 result = open_mr(
                     title="Branch 3.19",
@@ -192,9 +224,8 @@ class TestOpenMr(unittest.TestCase):
 
         def side_effect(cmd, **kwargs):
             call_count["n"] += 1
-            # First call is the idempotency check — returns empty (no existing MR).
             if call_count["n"] == 1:
-                return _run_returning("")
+                return _run_returning("[]")
             raise AssertionError("glab mr create must not be called in dry_run mode")
 
         with patch("lib.gitlab._run", side_effect=side_effect):
