@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional, Tuple
+from typing import Any, Callable
 
 
 @dataclass
@@ -23,17 +23,17 @@ class StepRunner:
         self,
         dry_run: bool = False,
         auto: bool = False,
-        resume_from: Optional[str] = None,
+        resume_from: str | None = None,
     ) -> None:
         self._dry_run = dry_run
         self._auto = auto
         self._resume_from = resume_from
-        self._steps: List[Step] = []
+        self._steps: list[Step] = []
 
     def add_step(self, step: Step) -> None:
         self._steps.append(step)
 
-    def run(self) -> List[Tuple[str, Any]]:
+    def run(self) -> list[tuple[str, Any]]:
         if self._resume_from is not None:
             known_names = {s.name for s in self._steps}
             if self._resume_from not in known_names:
@@ -43,7 +43,7 @@ class StepRunner:
                 )
 
         total = len(self._steps)
-        results: List[Tuple[str, Any]] = []
+        results: list[tuple[str, Any]] = []
         skipping = self._resume_from is not None
 
         for idx, step in enumerate(self._steps, start=1):
@@ -60,10 +60,8 @@ class StepRunner:
                 results.append((step.name, value))
                 continue
 
-            if self._auto:
-                print(f"\n[step {idx}/{total}] {step.name}")
-            else:
-                print(f"\n[step {idx}/{total}] {step.name}")
+            print(f"\n[step {idx}/{total}] {step.name}")
+            if not self._auto:
                 answer = input("Proceed? [Y/n] ")
                 if answer.strip().lower() == "n":
                     print("Skipped.")

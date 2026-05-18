@@ -57,8 +57,6 @@ def _load_user_settings() -> None:
                 os.environ[key] = value.strip()
 
 
-_load_user_settings()
-
 from lib.config import ReleaseConfig, load_config  # noqa: E402
 from lib.containerfile import patch_arg  # noqa: E402
 from lib.git import (  # noqa: E402
@@ -298,8 +296,12 @@ def _step_branch_oci(
     fork_base = os.environ.get("GITHUB_FORK_URL_BASE", f"https://github.com/{github_user}")
     fork_url = f"{fork_base.rstrip('/')}/{repo_name}.git"
 
-    default_branch = detect_default_branch(repo)
-    print(f"  Default branch for {repo}: {default_branch}")
+    if dry_run:
+        default_branch = "main"
+        print(f"[dry-run] Would detect default branch for {repo} (assuming {default_branch!r})")
+    else:
+        default_branch = detect_default_branch(repo)
+        print(f"  Default branch for {repo}: {default_branch}")
 
     clone_repo(upstream_url, fork_url, worktree, dry_run)
 
@@ -314,7 +316,13 @@ def _step_branch_oci(
         branch_exists = branch_exists_remote("upstream", config.branch_name, worktree)
 
     if branch_exists and recreate:
-        print(f"  Branch {config.branch_name!r} exists on upstream — deleting (--recreate).")
+        print(
+            f"\n  WARNING: --recreate will permanently DELETE the remote branch "
+            f"{config.branch_name!r} from upstream.\n"
+            f"  OCI image branches are permanent in production. "
+            f"Only proceed if this is a test environment.\n",
+            file=sys.stderr,
+        )
         _run(["git", "push", "upstream", "--delete", config.branch_name], cwd=worktree)
         branch_exists = False  # reset so we proceed with create + push
     elif branch_exists and not recreate:
@@ -417,6 +425,7 @@ def _step_branch_tenants(
 
 
 def main() -> None:
+    _load_user_settings()
     args = _parse_args()
     github_user = _require_env("GITHUB_USER")
     gitlab_user = _require_env("GITLAB_USER")
