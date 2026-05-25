@@ -50,6 +50,13 @@
 # Fork remote URLs — optional
 # ---------------------------------------------------------------------------
 
+# GitHub upstream URL base. Used to construct the push URL for upstream OCI repos.
+# The script clones via HTTPS (public, no auth) but pushes the versioned branch
+# directly to upstream; SSH is required unless you have HTTPS credentials configured.
+# Default: https://github.com/theforeman  (usually needs overriding to SSH)
+#
+# GITHUB_UPSTREAM_URL_BASE=git@github.com:theforeman
+
 # GitHub fork URL base. Used to construct the push remote for OCI image repos.
 # Default: https://github.com/$GITHUB_USER
 #

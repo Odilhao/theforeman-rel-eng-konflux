@@ -101,13 +101,38 @@ def _components_kustomization_content() -> str:
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
+  - application.yaml
   - components.yaml
 """
 
 
+def _application_yaml_content(config: ReleaseConfig, project: "_ProjectSpec") -> str:
+    """Generate a versioned Application CRD (e.g. pulp-3-19).
+
+    Versioned components must live in their own Application so that
+    Konflux snapshots are scoped to only the versioned components.
+    Without this, a build of pulp-3-19 would create a snapshot that
+    also includes pulp-develop, causing both ReleasePlans to fire.
+    """
+    v = config.version.replace(".", "-")
+    app_name = f"{project.app_name}-{v}"
+    display = f"{project.app_name.capitalize()} {config.version}"
+    return f"""\
+---
+apiVersion: appstudio.redhat.com/v1alpha1
+kind: Application
+metadata:
+  name: {app_name}
+  namespace: theforeman-org-tenant
+spec:
+  displayName: {display}
+"""
+
+
 def _components_yaml_content(config: ReleaseConfig, project: "_ProjectSpec") -> str:
-    v = config.version
+    v = config.version.replace(".", "-")  # dots invalid in Kubernetes names
     b = config.branch_name
+    versioned_app = f"{project.app_name}-{v}"  # own Application per version
     parts: list[str] = []
     for comp in project.components:
         parts.append(f"""\
@@ -122,7 +147,7 @@ metadata:
   name: {comp.name_base}-{v}
   namespace: theforeman-org-tenant
 spec:
-  application: {project.app_name}
+  application: {versioned_app}
   componentName: {comp.name_base}-{v}
   containerImage: {comp.staging_image}
   source:
@@ -135,9 +160,26 @@ spec:
     return "".join(parts)
 
 
+def _project_release_tags(config: ReleaseConfig, project: "_ProjectSpec") -> list[str]:
+    """Return the image tags to push for each project's release.
+
+    foreman: Foreman version tags (e.g. ["3.19", "3.19.0-rc1"])
+    pulp:    Pulp version + foreman-context tag (e.g. ["3.105", "foreman-3.19"])
+    candlepin: Candlepin XY + XYZ + foreman-context tag (e.g. ["4.7", "4.7.4", "foreman-3.19"])
+
+    The foreman-<version> tag is what foremanctl uses to find the correct
+    versioned candlepin/pulp images when deploying a specific Foreman release.
+    """
+    if project.app_name == "pulp":
+        return [config.pulp_version, config.foreman_tag]
+    if project.app_name == "candlepin":
+        return [config.candlepin_version, config.candlepin_version_xyz, config.foreman_tag]
+    return list(config.release_tags)
+
+
 def _releaseplan_kustomization_content(config: ReleaseConfig, project: "_ProjectSpec") -> str:
-    v = config.version
-    tags = config.release_tags
+    v = config.version.replace(".", "-")  # dots invalid in Kubernetes names
+    tags = _project_release_tags(config, project)
     tag_lines = "\n".join(f'              - "{t}"' for t in tags)
 
     components_patch_lines: list[str] = []
@@ -181,6 +223,9 @@ patches:
     patch: |-
 {single_component_patch}\
       - op: replace
+        path: /spec/application
+        value: {project.app_name}-{v}
+      - op: replace
         path: /spec/data/mapping/components
         value:
 {components_value}
@@ -203,25 +248,26 @@ def _insert_resource_entry(content: str, entry: str, path: "Path | None" = None)
 
 def _update_parent_kustomization(kustomization_path: Path, version: str, dry_run: bool) -> None:
     """Idempotently add '  - {version}/' to the resources list in kustomization_path."""
+    if dry_run:
+        print(f"[dry-run] Would update {kustomization_path}: add {version!r} to resources")
+        return
     entry_line = f"  - {version}/"
     content = kustomization_path.read_text()
     if entry_line in content.splitlines():
         return
     new_content = _insert_resource_entry(content, version, path=kustomization_path)
-    if dry_run:
-        print(f"[dry-run] Would write {kustomization_path}")
-        return
     kustomization_path.write_text(new_content)
     print(f"  Wrote {kustomization_path}")
 
 
 def generate_component_overlay(config: ReleaseConfig, project: "_ProjectSpec", tenant_path: Path, dry_run: bool) -> None:
-    """Generate components/<VERSION>/ kustomization.yaml and components.yaml."""
+    """Generate components/<VERSION>/ kustomization.yaml, application.yaml, and components.yaml."""
     overlay_dir = tenant_path / "components" / config.version
     if not dry_run:
         overlay_dir.mkdir(parents=True, exist_ok=True)
 
     _write_file(overlay_dir / "kustomization.yaml", _components_kustomization_content(), dry_run)
+    _write_file(overlay_dir / "application.yaml", _application_yaml_content(config, project), dry_run)
     _write_file(overlay_dir / "components.yaml", _components_yaml_content(config, project), dry_run)
 
 

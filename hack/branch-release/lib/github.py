@@ -156,15 +156,17 @@ def open_pr(
         URL of the PR (existing or newly created).
     """
     # Check whether a PR already exists for this head→base combination.
-    existing = _run(
-        ["gh", "pr", "list", "--head", head, "--base", base_branch, "--json", "url", "--jq", ".[0].url"],
-        cwd=cwd,
-        capture=True,
-    )
-    url = existing.stdout.strip()
-    if url:
-        print(f"PR already exists: {url}")
-        return url
+    # Skip the check in dry-run mode — the worktree directory doesn't exist.
+    if not dry_run:
+        existing = _run(
+            ["gh", "pr", "list", "--head", head, "--base", base_branch, "--json", "url", "--jq", ".[0].url"],
+            cwd=cwd,
+            capture=True,
+        )
+        url = existing.stdout.strip()
+        if url:
+            print(f"PR already exists: {url}")
+            return url
 
     cmd = [
         "gh", "pr", "create",

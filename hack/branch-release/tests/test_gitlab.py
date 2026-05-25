@@ -123,8 +123,13 @@ class TestValidateFork(unittest.TestCase):
             validate_fork("fedora/infrastructure/konflux/tenants-config", "myuser")
         mock_run.assert_called_once()
         call_args = mock_run.call_args[0][0]
-        self.assertIn("--hostname", call_args)
-        self.assertIn("gitlab.com", call_args)
+        self.assertNotIn("--hostname", call_args)
+        self.assertTrue(
+            any("https://gitlab.com/myuser/tenants-config" in a for a in call_args),
+            f"expected full GitLab URL in call args, got: {call_args}",
+        )
+        call_kwargs = mock_run.call_args[1]
+        self.assertEqual(call_kwargs.get("env", {}).get("GLAB_HOST"), "gitlab.com")
 
     def test_missing_fork_raises(self) -> None:
         import subprocess
@@ -187,8 +192,7 @@ class TestOpenMr(unittest.TestCase):
         self.assertIn("json", captured["cmd"])
         self.assertNotIn("--json", captured["cmd"])
         self.assertNotIn("--jq", captured["cmd"])
-        self.assertIn("--hostname", captured["cmd"])
-        self.assertIn("gitlab.com", captured["cmd"])
+        self.assertNotIn("--hostname", captured["cmd"])
 
     def test_creates_mr_when_none_exists(self) -> None:
         new_url = "https://gitlab.com/myuser/tenants-config/-/merge_requests/99"
@@ -238,7 +242,7 @@ class TestOpenMr(unittest.TestCase):
                     cwd=Path("/fake/repo"),
                     dry_run=True,
                 )
-        self.assertEqual(call_count["n"], 1, "only the idempotency check should run in dry_run")
+        self.assertEqual(call_count["n"], 0, "no subprocess calls should be made in dry_run mode")
 
 
 if __name__ == "__main__":

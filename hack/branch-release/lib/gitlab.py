@@ -17,17 +17,20 @@ from lib.subprocess_helpers import run as _run
 
 _TENANTS_CONFIG_RE = re.compile(r"(?<![a-z])gitlab\.com[:/]fedora/infrastructure/konflux/tenants-config")
 _GITLAB_HOST = "gitlab.com"
+_GLAB_ENV = {"GLAB_HOST": _GITLAB_HOST, "GITLAB_HOST": _GITLAB_HOST}
+# Strip stale session vars so glab uses its own stored credentials for gitlab.com.
+_GLAB_UNSET = ["GITLAB_TOKEN"]
 
 
 def validate_fork(upstream_repo: str, gitlab_user: str) -> None:
     """Verify that *gitlab_user* has a fork of *upstream_repo*."""
     repo_name = upstream_repo.split("/")[-1]
-    fork_repo = f"{gitlab_user}/{repo_name}"
+    fork_url = f"https://{_GITLAB_HOST}/{gitlab_user}/{repo_name}"
     try:
-        _run(["glab", "repo", "view", fork_repo, "--hostname", _GITLAB_HOST], capture=True)
+        _run(["glab", "repo", "view", fork_url], capture=True, env=_GLAB_ENV, unset_env=_GLAB_UNSET)
     except subprocess.CalledProcessError:
         print(
-            f"ERROR: Fork not found: {fork_repo}\n"
+            f"ERROR: Fork not found: {fork_url}\n"
             f"Please fork {upstream_repo} to your GitLab account ({gitlab_user}) first.\n"
             f"  glab repo fork {upstream_repo} --clone=false",
             file=sys.stderr,
@@ -103,30 +106,33 @@ def open_mr(
     dry_run: bool,
 ) -> str:
     """Open a GitLab MR, or return URL if one already exists. Idempotent."""
-    existing = _run(
-        [
-            "glab", "mr", "list",
-            "--source-branch", source_branch,
-            "--target-branch", target_branch,
-            "--hostname", _GITLAB_HOST,
-            "--output", "json",
-        ],
-        cwd=cwd,
-        capture=True,
-    )
-    try:
-        data = json.loads(existing.stdout or "[]")
-    except json.JSONDecodeError:
-        print(
-            f"ERROR: glab mr list returned unexpected output: {existing.stdout!r}\n"
-            "Ensure glab is authenticated and targeting the correct host.",
-            file=sys.stderr,
+    # Skip the check in dry-run mode — the worktree directory doesn't exist.
+    if not dry_run:
+        existing = _run(
+            [
+                "glab", "mr", "list",
+                "--source-branch", source_branch,
+                "--target-branch", target_branch,
+                "--output", "json",
+            ],
+            cwd=cwd,
+            capture=True,
+            env=_GLAB_ENV,
+            unset_env=_GLAB_UNSET,
         )
-        raise SystemExit(1)
-    url = data[0].get("web_url", "") if data else ""
-    if url:
-        print(f"MR already exists: {url}")
-        return url
+        try:
+            data = json.loads(existing.stdout or "[]")
+        except json.JSONDecodeError:
+            print(
+                f"ERROR: glab mr list returned unexpected output: {existing.stdout!r}\n"
+                "Ensure glab is authenticated and targeting the correct host.",
+                file=sys.stderr,
+            )
+            raise SystemExit(1)
+        url = data[0].get("web_url", "") if data else ""
+        if url:
+            print(f"MR already exists: {url}")
+            return url
 
     cmd = [
         "glab", "mr", "create",
@@ -134,12 +140,11 @@ def open_mr(
         "--target-branch", target_branch,
         "--title", title,
         "--description", body,
-        "--hostname", _GITLAB_HOST,
     ]
 
     if dry_run:
-        _dry_print(cmd, cwd=cwd)
+        _dry_print(cmd, cwd=cwd, env=_GLAB_ENV, unset_env=_GLAB_UNSET)
         return "[dry-run: MR URL not available]"
 
-    result = _run(cmd, cwd=cwd, capture=True)
+    result = _run(cmd, cwd=cwd, capture=True, env=_GLAB_ENV, unset_env=_GLAB_UNSET)
     return result.stdout.strip()

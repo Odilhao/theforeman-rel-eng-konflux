@@ -58,11 +58,12 @@ def _load_user_settings() -> None:
 
 
 from lib.config import ReleaseConfig, load_config  # noqa: E402
-from lib.containerfile import patch_arg  # noqa: E402
+from lib.containerfile import patch_arg, patch_makefile_var, patch_workflow_env  # noqa: E402
 from lib.git import (  # noqa: E402
     branch_exists_remote,
     clone_repo,
     commit_all,
+    commit_empty,
     create_branch,
     detect_default_branch,
     push_branch,
@@ -95,12 +96,43 @@ _CONTAINERFILE_PATCHES: dict[str, list[tuple[str, str, str]]] = {
         ("images/foreman/Containerfile", "FOREMAN_VERSION", "version"),
         ("images/foreman/Containerfile", "KATELLO_VERSION", "katello_version"),
         ("images/foreman-proxy/Containerfile", "FOREMAN_VERSION", "version"),
+        ("images/foreman-proxy/Containerfile", "KATELLO_VERSION", "katello_version"),
     ],
     "candlepin-oci-images": [
-        ("images/candlepin/Containerfile", "CANDLEPIN_VERSION", "candlepin_version"),
-        ("images/candlepin/Containerfile", "CANDLEPIN_VERSION_XYZ", "candlepin_version_xyz"),
+        ("images/candlepin/Containerfile", "VERSION", "candlepin_version"),
+        ("images/candlepin/Containerfile", "VERSION_XYZ", "candlepin_version_xyz"),
     ],
-    "pulp-oci-images": [],  # no pinned version ARG to patch
+    "pulp-oci-images": [
+        ("images/pulp/Containerfile", "VERSION", "pulp_version"),
+    ],
+}
+
+# Per-repo Makefile variable patches:
+#   {repo_name: [(makefile_rel_path, var_name, config_attr), ...]}
+_MAKEFILE_PATCHES: dict[str, list[tuple[str, str, str]]] = {
+    "foreman-oci-images": [
+        ("Makefile", "FOREMAN_XY_TAG", "version"),
+        ("Makefile", "FOREMAN_XYZ_TAG", "version_xyz"),
+        ("Makefile", "KATELLO_VERSION", "katello_version"),
+    ],
+    "candlepin-oci-images": [
+        ("Makefile", "FOREMAN_XY_TAG", "foreman_tag"),
+        ("Makefile", "FOREMAN_XYZ_TAG", "foreman_tag"),
+    ],
+    "pulp-oci-images": [
+        ("Makefile", "PROJECT_XY_TAG", "pulp_version"),
+        ("Makefile", "PROJECT_XYZ_TAG", "pulp_version"),
+        ("Makefile", "FOREMAN_XY_TAG", "foreman_tag"),
+        ("Makefile", "FOREMAN_XYZ_TAG", "foreman_tag"),
+    ],
+}
+
+# Per-repo GitHub Actions workflow env patches:
+#   {repo_name: [(workflow_rel_path, var_name, config_attr), ...]}
+_WORKFLOW_PATCHES: dict[str, list[tuple[str, str, str]]] = {
+    "foreman-oci-images": [
+        (".github/workflows/integration.yml", "IMAGE_TAG", "version"),
+    ],
 }
 
 # ---------------------------------------------------------------------------
@@ -292,7 +324,10 @@ def _step_branch_oci(
     from lib.subprocess_helpers import dry_print as _dry_print
 
     repo_name = repo.split("/")[-1]
-    upstream_url = f"https://github.com/{repo}.git"
+    upstream_org = repo.split("/")[0]
+    upstream_url = f"https://github.com/{repo}.git"  # HTTPS for cloning (public, no auth needed)
+    upstream_push_base = os.environ.get("GITHUB_UPSTREAM_URL_BASE", f"https://github.com/{upstream_org}")
+    upstream_push_url = f"{upstream_push_base.rstrip('/')}/{repo_name}.git"
     fork_base = os.environ.get("GITHUB_FORK_URL_BASE", f"https://github.com/{github_user}")
     fork_url = f"{fork_base.rstrip('/')}/{repo_name}.git"
 
@@ -304,6 +339,14 @@ def _step_branch_oci(
         print(f"  Default branch for {repo}: {default_branch}")
 
     clone_repo(upstream_url, fork_url, worktree, dry_run)
+
+    # If the upstream push URL differs from the fetch URL (e.g., SSH vs HTTPS), configure it.
+    if upstream_push_url != upstream_url:
+        if dry_run:
+            from lib.subprocess_helpers import dry_print as _dp
+            _dp(["git", "remote", "set-url", "--push", "upstream", upstream_push_url], cwd=worktree)
+        else:
+            _run(["git", "remote", "set-url", "--push", "upstream", upstream_push_url], cwd=worktree)
 
     # Check whether the branch already exists on upstream.
     # branch_exists_remote requires a live worktree, so skip in dry-run and just show intent.
@@ -330,31 +373,57 @@ def _step_branch_oci(
 
     if not branch_exists:
         create_branch(config.branch_name, f"upstream/{default_branch}", worktree, dry_run)
+        # Push to upstream first — this creates the versioned branch in the upstream repo.
+        push_branch("upstream", config.branch_name, worktree, dry_run)
 
-        # Apply Containerfile patches.
-        patches = _CONTAINERFILE_PATCHES.get(repo_name, [])
+        # Apply Containerfile patches on top of the upstream branch.
         any_patched = False
-        for rel_path, arg_name, config_attr in patches:
+        for rel_path, arg_name, config_attr in _CONTAINERFILE_PATCHES.get(repo_name, []):
             containerfile = worktree / rel_path
             new_value = getattr(config, config_attr)
             if dry_run:
                 print(f"[dry-run] Would patch {containerfile}: ARG {arg_name}={new_value!r}")
                 any_patched = True
             else:
-                patched = patch_arg(containerfile, arg_name, new_value, dry_run=False)
-                if patched:
+                if patch_arg(containerfile, arg_name, new_value, dry_run=False):
+                    any_patched = True
+
+        # Apply Makefile patches (e.g. version tags used by make build).
+        for rel_path, var_name, config_attr in _MAKEFILE_PATCHES.get(repo_name, []):
+            makefile = worktree / rel_path
+            new_value = getattr(config, config_attr)
+            if dry_run:
+                print(f"[dry-run] Would patch {makefile}: {var_name}={new_value!r}")
+                any_patched = True
+            else:
+                if patch_makefile_var(makefile, var_name, new_value, dry_run=False):
+                    any_patched = True
+
+        # Apply GitHub Actions workflow env patches.
+        for rel_path, var_name, config_attr in _WORKFLOW_PATCHES.get(repo_name, []):
+            workflow = worktree / rel_path
+            new_value = getattr(config, config_attr)
+            if dry_run:
+                print(f"[dry-run] Would patch {workflow}: {var_name}: {new_value!r}")
+                any_patched = True
+            else:
+                if patch_workflow_env(workflow, var_name, new_value, dry_run=False):
                     any_patched = True
 
         if any_patched:
-            commit_all(f"Branch {config.branch_name}: patch Containerfile versions", worktree, dry_run)
+            commit_all(f"Branch {config.branch_name}: patch Containerfile versions and Makefile tags", worktree, dry_run)
+        else:
+            commit_empty(f"Branch {config.branch_name}: mark release branch", worktree, dry_run)
 
-        push_branch("origin", config.branch_name, worktree, dry_run)
+        # Force-push to fork — the fork may already have the branch from a previous partial run.
+        push_branch("origin", config.branch_name, worktree, dry_run, force=True)
 
+    # PR targets the versioned branch in upstream so Konflux can build from it.
     # open_pr is idempotent — it returns the existing PR URL if one already exists.
     pr_url = open_pr(
         title=f"Branch: {config.branch_name}",
         body=_pr_body(config),
-        base_branch=default_branch,
+        base_branch=config.branch_name,
         head=f"{github_user}:{config.branch_name}",
         draft=True,
         cwd=worktree,
@@ -405,7 +474,7 @@ def _step_branch_tenants(
         worktree,
         dry_run,
     )
-    push_branch("origin", branch_name, worktree, dry_run)
+    push_branch("origin", branch_name, worktree, dry_run, force=True)
 
     mr_url = open_mr(
         title=f"Branch {config.branch_name}: register Konflux components",

@@ -144,7 +144,7 @@ def create_branch(branch: str, base: str, cwd: Path, dry_run: bool) -> None:
     _run(cmd, cwd=cwd)
 
 
-def push_branch(remote: str, branch: str, cwd: Path, dry_run: bool) -> None:
+def push_branch(remote: str, branch: str, cwd: Path, dry_run: bool, force: bool = False) -> None:
     """Push *branch* to *remote*.
 
     Parameters
@@ -157,8 +157,25 @@ def push_branch(remote: str, branch: str, cwd: Path, dry_run: bool) -> None:
         Working directory.
     dry_run:
         If True, print the command without executing it.
+    force:
+        If True, force-push (--force-with-lease).
     """
     cmd = ["git", "push", remote, branch]
+    if force:
+        cmd.append("--force")
+    if dry_run:
+        _dry_print(cmd, cwd=cwd)
+        return
+    _run(cmd, cwd=cwd)
+
+
+def commit_empty(message: str, cwd: Path, dry_run: bool) -> None:
+    """Create an empty commit (no staged changes required).
+
+    Used when a release branch has no Containerfile patches but still needs
+    a commit so a pull request can be opened against upstream.
+    """
+    cmd = ["git", "commit", "--allow-empty", "-m", message]
     if dry_run:
         _dry_print(cmd, cwd=cwd)
         return

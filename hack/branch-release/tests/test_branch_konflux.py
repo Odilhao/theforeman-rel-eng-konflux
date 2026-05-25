@@ -137,10 +137,12 @@ def test_containerfile_patches_foreman_oci_images_non_empty(branch_konflux_mod) 
     assert len(patches) > 0
 
 
-def test_containerfile_patches_pulp_oci_images_empty(branch_konflux_mod) -> None:
-    # pulp-oci-images has no pinned version ARG
+def test_containerfile_patches_pulp_oci_images_non_empty(branch_konflux_mod) -> None:
+    # pulp-oci-images pins VERSION (the Pulp version)
     patches = branch_konflux_mod._CONTAINERFILE_PATCHES["pulp-oci-images"]
-    assert patches == []
+    assert len(patches) == 1
+    assert patches[0][1] == "VERSION"
+    assert patches[0][2] == "pulp_version"
 
 
 def test_containerfile_patches_candlepin_oci_images_non_empty(branch_konflux_mod) -> None:

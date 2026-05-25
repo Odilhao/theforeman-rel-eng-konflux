@@ -27,11 +27,14 @@ from lib.tenants import (  # noqa: E402
 SAMPLE_CONFIG = ReleaseConfig(
     version="3.19",
     branch_name="foreman-3.19",
+    foreman_tag="foreman-3.19",
     oci_repos=["theforeman/foreman-oci-images"],
     release_tags=["3.19", "3.19.0"],
+    version_xyz="3.19.0",
     rpm_check_url="https://example.com",
     rpm_check_timeout=3600,
     katello_version="4.15",
+    pulp_version="3.105",
     candlepin_version="4.7",
     candlepin_version_xyz="4.7.4",
 )
@@ -86,8 +89,8 @@ class TestGenerateComponentOverlay(unittest.TestCase):
 
         comp_text = comp.read_text()
         self.assertTrue(comp_text.startswith("---"), "components.yaml must start with ---")
-        self.assertIn("foreman-3.19", comp_text)
-        self.assertIn("foreman-proxy-3.19", comp_text)
+        self.assertIn("foreman-3-19", comp_text)
+        self.assertIn("foreman-proxy-3-19", comp_text)
         self.assertIn("revision: foreman-3.19", comp_text)
         self.assertIn("quay.io/foreman/foreman-stage", comp_text)
         self.assertIn("quay.io/foreman/foreman-proxy-stage", comp_text)
@@ -104,7 +107,7 @@ class TestGenerateComponentOverlay(unittest.TestCase):
         generate_component_overlay(SAMPLE_CONFIG, _PROJECTS["foreman-oci-images"], tenant_path, dry_run=False)
 
         comp_text = (tenant_path / "components" / "3.19" / "components.yaml").read_text()
-        self.assertIn("foreman-3.19", comp_text)
+        self.assertIn("foreman-3-19", comp_text)
 
     def test_dry_run_writes_no_files(self) -> None:
         tmp = tempfile.mkdtemp()
@@ -131,15 +134,15 @@ class TestGenerateReleaseplanOverlay(unittest.TestCase):
         self.assertTrue(kust.exists(), "releaseplans kustomization.yaml must be created")
         text = kust.read_text()
         self.assertTrue(text.startswith("---"), "must start with ---")
-        self.assertIn("foreman-3.19", text)
-        self.assertIn("foreman-proxy-3.19", text)
+        self.assertIn("foreman-3-19", text)
+        self.assertIn("foreman-proxy-3-19", text)
         self.assertIn('"3.19"', text)
         self.assertIn('"3.19.0"', text)
         self.assertIn("quay.io/foreman/foreman\n", text)
         self.assertIn("quay.io/foreman/foreman-proxy\n", text)
         self.assertNotIn("foreman-stage", text, "production image must not have -stage suffix")
         self.assertIn("../base", text)
-        self.assertIn('suffix: "-3.19"', text)
+        self.assertIn('suffix: "-3-19"', text)
         self.assertNotIn("singleComponentMode", text, "foreman project must not have singleComponentMode")
 
     def test_tags_come_from_release_tags(self) -> None:
@@ -149,11 +152,14 @@ class TestGenerateReleaseplanOverlay(unittest.TestCase):
         cfg = ReleaseConfig(
             version="3.20",
             branch_name="foreman-3.20",
+            foreman_tag="foreman-3.20",
             oci_repos=["theforeman/foreman-oci-images"],
             release_tags=["3.20", "3.20.0", "3.20.1"],
+            version_xyz="3.20.0",
             rpm_check_url="https://example.com",
             rpm_check_timeout=3600,
             katello_version="4.16",
+            pulp_version="3.105",
             candlepin_version="4.8",
             candlepin_version_xyz="4.8.0",
         )
@@ -276,10 +282,10 @@ class TestGeneratePulpOverlay(unittest.TestCase):
         generate_component_overlay(SAMPLE_CONFIG, _PROJECTS["pulp-oci-images"], tmp_path, dry_run=False)
 
         comp_text = (tmp_path / "components" / "3.19" / "components.yaml").read_text()
-        self.assertIn("pulp-3.19", comp_text)
+        self.assertIn("pulp-3-19", comp_text)
         self.assertIn("images/pulp/Containerfile", comp_text)
-        self.assertNotIn("name: foreman-3.19", comp_text)
-        self.assertNotIn("componentName: foreman-3.19", comp_text)
+        self.assertNotIn("name: foreman-3-19", comp_text)
+        self.assertNotIn("componentName: foreman-3-19", comp_text)
 
     def test_creates_pulp_releaseplan_with_single_component_mode(self) -> None:
         tmp = tempfile.mkdtemp()
@@ -290,7 +296,7 @@ class TestGeneratePulpOverlay(unittest.TestCase):
 
         text = (tmp_path / "releaseplans" / "3.19" / "kustomization.yaml").read_text()
         self.assertIn("singleComponentMode: true", text)
-        self.assertIn("pulp-3.19", text)
+        self.assertIn("pulp-3-19", text)
         self.assertIn("quay.io/foreman/pulp\n", text)
         self.assertNotIn("pulp-stage", text)
 
@@ -305,9 +311,9 @@ class TestGenerateCandlepinOverlay(unittest.TestCase):
         generate_component_overlay(SAMPLE_CONFIG, _PROJECTS["candlepin-oci-images"], tmp_path, dry_run=False)
 
         comp_text = (tmp_path / "components" / "3.19" / "components.yaml").read_text()
-        self.assertIn("candlepin-3.19", comp_text)
-        self.assertNotIn("name: foreman-3.19", comp_text)
-        self.assertNotIn("componentName: foreman-3.19", comp_text)
+        self.assertIn("candlepin-3-19", comp_text)
+        self.assertNotIn("name: foreman-3-19", comp_text)
+        self.assertNotIn("componentName: foreman-3-19", comp_text)
 
     def test_creates_candlepin_releaseplan_with_single_component_mode(self) -> None:
         tmp = tempfile.mkdtemp()
@@ -318,7 +324,7 @@ class TestGenerateCandlepinOverlay(unittest.TestCase):
 
         text = (tmp_path / "releaseplans" / "3.19" / "kustomization.yaml").read_text()
         self.assertIn("singleComponentMode: true", text)
-        self.assertIn("candlepin-3.19", text)
+        self.assertIn("candlepin-3-19", text)
         self.assertIn("quay.io/foreman/candlepin\n", text)
         self.assertNotIn("candlepin-stage", text)
 

@@ -44,13 +44,14 @@ class TestLoadConfig(unittest.TestCase):
         self.assertIn("theforeman/pulp-oci-images", cfg.oci_repos)
         self.assertIn("theforeman/candlepin-oci-images", cfg.oci_repos)
         self.assertIn("3.19", cfg.release_tags)
-        self.assertIn("3.19.0", cfg.release_tags)
+        self.assertIn("3.19.0-rc1", cfg.release_tags)
         self.assertEqual(
             cfg.rpm_check_url,
             "https://yum.theforeman.org/releases/3.19/el9/x86_64/repodata/repomd.xml",
         )
         self.assertEqual(cfg.rpm_check_timeout, 14400)
-        self.assertEqual(cfg.katello_version, "4.15")
+        self.assertEqual(cfg.katello_version, "4.21")
+        self.assertEqual(cfg.pulp_version, "3.105")
         self.assertEqual(cfg.candlepin_version, "4.7")
         self.assertEqual(cfg.candlepin_version_xyz, "4.7.4")
 
