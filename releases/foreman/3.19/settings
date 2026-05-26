@@ -4,10 +4,10 @@
 VERSION=3.19
 BRANCH_NAME=foreman-3.19
 OCI_REPOS="theforeman/foreman-oci-images theforeman/pulp-oci-images theforeman/candlepin-oci-images"
-RELEASE_TAGS="3.19 3.19.0-rc1"
+RELEASE_TAGS="3.19 3.19.0-rc2"
 RPM_CHECK_URL=https://yum.theforeman.org/releases/3.19/el9/x86_64/repodata/repomd.xml
 RPM_CHECK_TIMEOUT=14400
 KATELLO_VERSION=4.21
 PULP_VERSION=3.105
 CANDLEPIN_VERSION=4.7
-CANDLEPIN_VERSION_XYZ=4.7.4
+CANDLEPIN_VERSION_XYZ=4.7.5
