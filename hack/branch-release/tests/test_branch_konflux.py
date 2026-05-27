@@ -150,6 +150,50 @@ def test_containerfile_patches_candlepin_oci_images_non_empty(branch_konflux_mod
     assert len(patches) > 0
 
 
+# ---------------------------------------------------------------------------
+# _MAKEFILE_PATCHES
+# ---------------------------------------------------------------------------
+
+
+def test_makefile_patches_covers_all_known_repos(branch_konflux_mod) -> None:
+    patches = branch_konflux_mod._MAKEFILE_PATCHES
+    assert "foreman-oci-images" in patches
+    assert "pulp-oci-images" in patches
+    assert "candlepin-oci-images" in patches
+
+
+def test_makefile_patches_candlepin_includes_project_versions(branch_konflux_mod) -> None:
+    """candlepin Makefile must pin both PROJECT_XY_TAG and PROJECT_XYZ_TAG."""
+    patches = branch_konflux_mod._MAKEFILE_PATCHES["candlepin-oci-images"]
+    var_to_attr = {var: attr for _, var, attr in patches}
+    assert "PROJECT_XY_TAG" in var_to_attr, "Missing PROJECT_XY_TAG patch for candlepin"
+    assert var_to_attr["PROJECT_XY_TAG"] == "candlepin_version"
+    assert "PROJECT_XYZ_TAG" in var_to_attr, "Missing PROJECT_XYZ_TAG patch for candlepin"
+    assert var_to_attr["PROJECT_XYZ_TAG"] == "candlepin_version_xyz"
+
+
+def test_makefile_patches_candlepin_foreman_xyz_uses_foreman_xyz_tag(branch_konflux_mod) -> None:
+    """FOREMAN_XYZ_TAG in candlepin must use foreman_xyz_tag (e.g. foreman-3.19.0-rc2)."""
+    patches = branch_konflux_mod._MAKEFILE_PATCHES["candlepin-oci-images"]
+    var_to_attr = {var: attr for _, var, attr in patches}
+    assert var_to_attr.get("FOREMAN_XYZ_TAG") == "foreman_xyz_tag"
+
+
+def test_makefile_patches_pulp_foreman_xyz_uses_foreman_xyz_tag(branch_konflux_mod) -> None:
+    """FOREMAN_XYZ_TAG in pulp must use foreman_xyz_tag, not foreman_tag."""
+    patches = branch_konflux_mod._MAKEFILE_PATCHES["pulp-oci-images"]
+    var_to_attr = {var: attr for _, var, attr in patches}
+    assert var_to_attr.get("FOREMAN_XYZ_TAG") == "foreman_xyz_tag"
+
+
+def test_makefile_patches_entries_are_three_tuples(branch_konflux_mod) -> None:
+    for repo_name, entries in branch_konflux_mod._MAKEFILE_PATCHES.items():
+        for entry in entries:
+            assert len(entry) == 3, (
+                f"Expected 3-tuple for {repo_name}, got {len(entry)}-tuple: {entry!r}"
+            )
+
+
 def test_containerfile_patches_entries_are_three_tuples(branch_konflux_mod) -> None:
     """Each entry is a (rel_path, arg_name, config_attr) triple."""
     for repo_name, entries in branch_konflux_mod._CONTAINERFILE_PATCHES.items():

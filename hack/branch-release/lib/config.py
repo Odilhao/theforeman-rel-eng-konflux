@@ -52,10 +52,11 @@ class ReleaseConfig:
 
     version: str
     branch_name: str
-    foreman_tag: str  # "foreman-<version>", e.g. "foreman-3.19" — used as image tag prefix
+    foreman_tag: str      # "foreman-<version>", e.g. "foreman-3.19"
+    foreman_xyz_tag: str  # "foreman-<version_xyz>", e.g. "foreman-3.19.0-rc2"
     oci_repos: list[str]
     release_tags: list[str]
-    version_xyz: str  # first patch-level tag, e.g. "3.19.0-rc1"
+    version_xyz: str  # first patch-level tag, e.g. "3.19.0-rc2"
     rpm_check_url: str
     rpm_check_timeout: int
     katello_version: str
@@ -141,6 +142,7 @@ def load_config(version: str) -> ReleaseConfig:
         version=data["VERSION"],
         branch_name=data["BRANCH_NAME"],
         foreman_tag=f"foreman-{data['VERSION']}",
+        foreman_xyz_tag=f"foreman-{version_xyz}",
         oci_repos=data["OCI_REPOS"].split(),
         release_tags=tags,
         version_xyz=version_xyz,

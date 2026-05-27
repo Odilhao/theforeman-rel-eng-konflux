@@ -1,0 +1,89 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.9"
+# dependencies = ["jinja2"]
+# ///
+"""
+discourse_post — Render the Discourse Markdown section for a Foreman OCI branching release.
+
+Usage:
+    uv run hack/branch-release/discourse_post --version=3.19
+
+Prints the rendered Markdown to stdout so it can be pasted directly into the
+release's Discourse topic. If DISCOURSE_URL is set in the release settings file,
+the target URL is also printed to stderr.
+
+Template: hack/branch-release/templates/discourse-oci-branching.md.j2
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+_SCRIPT_DIR = Path(__file__).parent
+sys.path.insert(0, str(_SCRIPT_DIR))
+
+from jinja2 import Environment, FileSystemLoader, StrictUndefined  # noqa: E402
+from lib.config import load_config  # noqa: E402
+
+
+def _repo_name(repo: str) -> str:
+    """Extract the repo name from an owner/name string."""
+    return repo.split("/")[-1]
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        prog="discourse_post",
+        description="Render the Discourse OCI branching section for a Foreman release.",
+    )
+    parser.add_argument(
+        "--version",
+        required=True,
+        metavar="VERSION",
+        help="Release version in MAJOR.MINOR format (e.g. 3.19)",
+    )
+    parser.add_argument(
+        "--template",
+        default="discourse-oci-branching.md.j2",
+        metavar="TEMPLATE",
+        help="Template filename inside hack/branch-release/templates/ (default: discourse-oci-branching.md.j2)",
+    )
+    return parser.parse_args()
+
+
+def render(version: str, template_name: str) -> str:
+    config = load_config(version)
+
+    env = Environment(
+        loader=FileSystemLoader(_SCRIPT_DIR / "templates"),
+        undefined=StrictUndefined,
+        keep_trailing_newline=True,
+    )
+    env.filters["repo_name"] = _repo_name
+
+    template = env.get_template(template_name)
+    return template.render(
+        version=config.version,
+        branch_name=config.branch_name,
+        oci_repos=config.oci_repos,
+        release_tags=config.release_tags,
+        version_xyz=config.version_xyz,
+        rpm_check_url=config.rpm_check_url,
+        katello_version=config.katello_version,
+        pulp_version=config.pulp_version,
+        candlepin_version=config.candlepin_version,
+        candlepin_version_xyz=config.candlepin_version_xyz,
+    )
+
+
+def main() -> None:
+    args = _parse_args()
+    output = render(args.version, args.template)
+    print(output)
+
+
+if __name__ == "__main__":
+    main()

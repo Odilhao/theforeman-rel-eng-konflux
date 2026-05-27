@@ -127,6 +127,7 @@ def open_pr(
     draft: bool,
     cwd: Path,
     dry_run: bool,
+    repo: str | None = None,
 ) -> str:
     """Open a pull request, or return the URL if one already exists.
 
@@ -142,34 +143,44 @@ def open_pr(
     base_branch:
         Target branch for the PR.
     head:
-        Source branch for the PR (e.g. "origin:fix-branch").
+        Source branch for the PR (e.g. "myuser:foreman-3.19").
     draft:
         Whether to open the PR as a draft.
     cwd:
         Working directory (repo root).
     dry_run:
         If True, print the command without executing it.
+    repo:
+        Upstream repo in OWNER/NAME format (e.g. "theforeman/foreman-oci-images").
+        Passed as ``--repo`` to all ``gh pr`` commands so that the correct repo is
+        targeted even when the ``origin`` remote points to a personal fork.
 
     Returns
     -------
     str
         URL of the PR (existing or newly created).
     """
+    repo_flag = ["--repo", repo] if repo else []
+    # gh pr list --head takes just the branch name; gh pr create --head takes user:branch.
+    head_branch = head.split(":")[-1]
+
     # Check whether a PR already exists for this head→base combination.
     # Skip the check in dry-run mode — the worktree directory doesn't exist.
     if not dry_run:
         existing = _run(
-            ["gh", "pr", "list", "--head", head, "--base", base_branch, "--json", "url", "--jq", ".[0].url"],
+            ["gh", "pr", "list", *repo_flag, "--head", head_branch, "--base", base_branch,
+             "--json", "url", "--jq", ".[0].url"],
             cwd=cwd,
             capture=True,
         )
         url = existing.stdout.strip()
-        if url:
-            print(f"PR already exists: {url}")
+        if url and url != "null":
+            print(f"  PR already exists: {url}")
             return url
 
     cmd = [
         "gh", "pr", "create",
+        *repo_flag,
         "--title", title,
         "--body", body,
         "--base", base_branch,
@@ -182,5 +193,20 @@ def open_pr(
         _dry_print(cmd, cwd=cwd)
         return "[dry-run: PR URL not available]"
 
-    result = _run(cmd, cwd=cwd, capture=True)
-    return result.stdout.strip()
+    try:
+        result = _run(cmd, cwd=cwd, capture=True)
+        return result.stdout.strip()
+    except subprocess.CalledProcessError:
+        # gh pr create exits non-zero when a PR already exists.
+        # Fall back to looking up the existing PR URL.
+        existing = _run(
+            ["gh", "pr", "list", *repo_flag, "--head", head_branch, "--base", base_branch,
+             "--json", "url", "--jq", ".[0].url"],
+            cwd=cwd,
+            capture=True,
+        )
+        url = existing.stdout.strip()
+        if url and url != "null":
+            print(f"  PR already exists: {url}")
+            return url
+        raise

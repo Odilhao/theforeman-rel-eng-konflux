@@ -1,0 +1,33 @@
+## Konflux OCI Image Branching
+
+Run after RPM branching is complete and packages appear in the versioned repo.
+Use either the orchestrator script or follow the manual runbook linked below.
+
+**Documentation:**
+- [OCI branching runbook](https://github.com/theforeman/theforeman-rel-eng-konflux/blob/develop/docs/oci-branching-runbook.md)
+- [Release settings](https://github.com/theforeman/theforeman-rel-eng-konflux/blob/develop/releases/foreman/{{ version }}/settings)
+
+**Prerequisites:**
+- [ ] Tools installed: `uv`, `git`, `gh`, `glab`, `yq`, `jq`, `kustomize`, `oc`
+- [ ] GitHub forks: {% for repo in oci_repos %}[{{ repo | repo_name }}](https://github.com/{{ repo }}){% if not loop.last %}, {% endif %}{% endfor %}
+
+- [ ] GitLab fork: [tenants-config](https://gitlab.com/fedora/infrastructure/konflux/tenants-config)
+- [ ] Env vars: `FOREMAN_VERSION={{ version }}`, `GITHUB_USER`, `GITLAB_USER`
+
+**Steps:**
+- [ ] Dry-run first: `uv run hack/branch-release/branch_konflux --version={{ version }} --dry-run`
+- [ ] Execute: `uv run hack/branch-release/branch_konflux --version={{ version }}`
+  Creates branch `{{ branch_name }}` and opens draft PRs/MR in:
+{% for repo in oci_repos %}  - [ ] [{{ repo | repo_name }}](https://github.com/{{ repo }}/pulls)
+{% endfor %}  - [ ] [tenants-config](https://gitlab.com/fedora/infrastructure/konflux/tenants-config/-/merge_requests)
+- [ ] Review and merge the {{ oci_repos | length }} OCI repo PRs
+- [ ] Wait for RPMs: `https://yum.theforeman.org/releases/{{ version }}/el9/x86_64/repodata/repomd.xml`
+- [ ] Merge tenants-config MR (registers `{{ branch_name }}` components in Konflux)
+- [ ] Verify first `{{ version }}` build succeeds in [Konflux UI](https://console.redhat.com/application-pipeline)
+
+**Published images** (after all steps complete):
+{% for tag in release_tags -%}
+- `quay.io/theforeman/foreman:{{ tag }}`, `quay.io/theforeman/foreman-proxy:{{ tag }}`
+{% endfor -%}
+- `quay.io/theforeman/pulp:{{ pulp_version }}`, `quay.io/theforeman/pulp:foreman-{{ version }}`
+- `quay.io/theforeman/candlepin:{{ candlepin_version }}`, `quay.io/theforeman/candlepin:{{ candlepin_version_xyz }}`, `quay.io/theforeman/candlepin:foreman-{{ version }}`
