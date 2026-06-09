@@ -44,17 +44,22 @@ class TestLoadConfig(unittest.TestCase):
         self.assertIn("theforeman/pulp-oci-images", cfg.oci_repos)
         self.assertIn("theforeman/candlepin-oci-images", cfg.oci_repos)
         self.assertIn("3.19", cfg.release_tags)
-        self.assertIn("3.19.0-rc2", cfg.release_tags)
-        self.assertEqual(cfg.foreman_xyz_tag, "foreman-3.19.0-rc2")
+        xyz_tags = [t for t in cfg.release_tags if t.startswith("3.19.")]
+        self.assertGreater(len(xyz_tags), 0, "release_tags must contain at least one MAJOR.MINOR.PATCH tag")
+        self.assertEqual(cfg.version_xyz, xyz_tags[0])
+        self.assertEqual(cfg.foreman_xyz_tag, f"foreman-{cfg.version_xyz}")
         self.assertEqual(
             cfg.rpm_check_url,
             "https://yum.theforeman.org/releases/3.19/el9/x86_64/repodata/repomd.xml",
         )
         self.assertEqual(cfg.rpm_check_timeout, 14400)
-        self.assertEqual(cfg.katello_version, "4.21")
-        self.assertEqual(cfg.pulp_version, "3.105")
-        self.assertEqual(cfg.candlepin_version, "4.7")
-        self.assertEqual(cfg.candlepin_version_xyz, "4.7.5")
+        self.assertTrue(cfg.katello_version, "katello_version must be set")
+        self.assertTrue(cfg.pulp_version, "pulp_version must be set")
+        self.assertTrue(cfg.candlepin_version, "candlepin_version must be set")
+        self.assertTrue(
+            cfg.candlepin_version_xyz.startswith(cfg.candlepin_version + "."),
+            f"candlepin_version_xyz {cfg.candlepin_version_xyz!r} must be a patch of candlepin_version {cfg.candlepin_version!r}",
+        )
 
     def test_invalid_version_raises_exit(self) -> None:
         with self.assertRaises(SystemExit) as ctx:

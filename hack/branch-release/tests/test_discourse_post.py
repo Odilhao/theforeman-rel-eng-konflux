@@ -16,6 +16,8 @@ import importlib.machinery  # noqa: E402
 import importlib.util  # noqa: E402
 import types  # noqa: E402
 
+from lib.config import load_config  # noqa: E402
+
 
 def _load_discourse_post() -> types.ModuleType:
     source_path = _BR / "discourse_post"
@@ -38,6 +40,11 @@ def dp():
 
 
 @pytest.fixture(scope="session")
+def cfg():
+    return load_config("3.19")
+
+
+@pytest.fixture(scope="session")
 def rendered(dp):
     return dp.render("3.19", "discourse-oci-branching.md.j2")
 
@@ -56,17 +63,18 @@ def test_render_contains_all_oci_repos(rendered):
     assert "candlepin-oci-images" in rendered
 
 
-def test_render_contains_release_tags(rendered):
-    assert "3.19.0-rc2" in rendered
+def test_render_contains_release_tags(rendered, cfg):
+    for tag in cfg.release_tags:
+        assert tag in rendered, f"release tag {tag!r} not found in rendered output"
 
 
-def test_render_contains_pulp_version(rendered):
-    assert "3.105" in rendered
+def test_render_contains_pulp_version(rendered, cfg):
+    assert cfg.pulp_version in rendered
 
 
-def test_render_contains_candlepin_versions(rendered):
-    assert "4.7" in rendered
-    assert "4.7.5" in rendered
+def test_render_contains_candlepin_versions(rendered, cfg):
+    assert cfg.candlepin_version in rendered
+    assert cfg.candlepin_version_xyz in rendered
 
 
 def test_render_contains_checklist_items(rendered):

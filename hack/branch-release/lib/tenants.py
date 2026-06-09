@@ -41,10 +41,10 @@ _PROJECTS: dict[str, _ProjectSpec] = {
         single_component_mode=False,
         components=(
             _ComponentSpec("foreman", "images/foreman", "Containerfile",
-                           "quay.io/foreman/foreman-stage", "quay.io/foreman/foreman",
+                           "quay.io/foreman/stage/foreman", "quay.io/foreman/foreman",
                            "https://github.com/theforeman/foreman-oci-images.git"),
             _ComponentSpec("foreman-proxy", "images/foreman-proxy", "Containerfile",
-                           "quay.io/foreman/foreman-proxy-stage", "quay.io/foreman/foreman-proxy",
+                           "quay.io/foreman/stage/foreman-proxy", "quay.io/foreman/foreman-proxy",
                            "https://github.com/theforeman/foreman-oci-images.git"),
         ),
     ),
@@ -53,7 +53,7 @@ _PROJECTS: dict[str, _ProjectSpec] = {
         single_component_mode=True,
         components=(
             _ComponentSpec("pulp", "images/pulp", "images/pulp/Containerfile",
-                           "quay.io/foreman/pulp-stage", "quay.io/foreman/pulp",
+                           "quay.io/foreman/stage/pulp", "quay.io/foreman/pulp",
                            "https://github.com/theforeman/pulp-oci-images.git"),
         ),
     ),
@@ -62,7 +62,7 @@ _PROJECTS: dict[str, _ProjectSpec] = {
         single_component_mode=True,
         components=(
             _ComponentSpec("candlepin", "images/candlepin", "Containerfile",
-                           "quay.io/foreman/candlepin-stage", "quay.io/foreman/candlepin",
+                           "quay.io/foreman/stage/candlepin", "quay.io/foreman/candlepin",
                            "https://github.com/theforeman/candlepin-oci-images.git"),
         ),
     ),
@@ -180,14 +180,15 @@ def _project_release_tags(config: ReleaseConfig, project: "_ProjectSpec") -> lis
 def _releaseplan_kustomization_content(config: ReleaseConfig, project: "_ProjectSpec") -> str:
     v = config.version.replace(".", "-")  # dots invalid in Kubernetes names
     tags = _project_release_tags(config, project)
-    tag_lines = "\n".join(f'              - "{t}"' for t in tags)
+    tag_lines = "\n".join(f'                  - "{t}"' for t in tags)
 
     components_patch_lines: list[str] = []
     for comp in project.components:
         components_patch_lines.append(
             f"          - name: {comp.name_base}-{v}\n"
-            f"            repository: {comp.prod_image}\n"
-            f"            tags:\n"
+            f"            repositories:\n"
+            f"              - url: {comp.prod_image}\n"
+            f"                tags:\n"
             f"{tag_lines}"
         )
     components_value = "\n".join(components_patch_lines)
