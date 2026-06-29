@@ -16,7 +16,7 @@ automation; one is explicitly excluded (see the section below).
 |-----------|------------|----------------|----------|
 | `foreman-develop` | `theforeman/foreman-oci-images` | `master` | Yes |
 | `foreman-proxy-develop` | `theforeman/foreman-oci-images` | `master` | Yes |
-| `pulp-develop` | `theforeman/pulpcore-oci-images` | `main` | Yes |
+| `pulp-develop` | `theforeman/pulp-oci-images` | `master` | Yes |
 | `candlepin-develop` | `theforeman/candlepin-oci-images` | `master` | Yes |
 | `foreman-mcp-server-develop` | `theforeman/foreman-mcp-server` | — | **No** |
 
@@ -104,10 +104,10 @@ ARG KATELLO_VERSION=nightly
 
 ---
 
-## pulpcore-oci-images
+## pulp-oci-images
 
-**GitHub repo**: `theforeman/pulpcore-oci-images`
-**Default branch**: `main`
+**GitHub repo**: `theforeman/pulp-oci-images`
+**Default branch**: `master`
 
 ### Files
 
@@ -129,7 +129,7 @@ ARG KATELLO_VERSION=nightly
 | `path-context` | `images/pulp` |
 | `dockerfile` | `images/pulp/Containerfile` |
 | Containerfile path | `images/pulp/Containerfile` |
-| CEL `target_branch` | `main` |
+| CEL `target_branch` | `master` |
 | CEL `pathChanged` globs | `images/pulp/***`, `.tekton/pulp-develop-{push,pull-request}.yaml`, `images/pulp/Containerfile` |
 | `buildah-oci-ta` bundle | `quay.io/konflux-ci/tekton-catalog/task-buildah-oci-ta:0.9@sha256:681d9f65a7f50cb260ee576ccab551e11d63c549f1e1ef3d201da3c112855bd6` |
 
@@ -139,8 +139,7 @@ ARG KATELLO_VERSION=nightly
 ARG VERSION=nightly
 ```
 
-Note: `pulpcore-oci-images` uses `main` as its default branch, unlike the other
-two repos which use `master`. The CEL expression must reflect this.
+Note: `pulp-oci-images` was renamed from `pulpcore-oci-images` and its default branch was changed from `main` to `master`. The CEL expression now uses `master` like the other repos.
 
 ---
 
@@ -256,7 +255,7 @@ The branching script is only responsible for:
 |-------|---------------|---------------------------------|
 | `metadata.name` | `foreman-develop-on-push` | `foreman-3.19-on-push` |
 | `appstudio.openshift.io/component` | `foreman-develop` | `foreman-3.19` |
-| CEL `target_branch` | `master` (or `main` for pulp) | `foreman-3.19` |
+| CEL `target_branch` | `master` | `foreman-3.19` |
 | CEL `.tekton` file reference | `foreman-develop-push.yaml` | `foreman-3.19-push.yaml` |
 | `taskRunTemplate.serviceAccountName` | `build-pipeline-foreman-develop` | `build-pipeline-foreman-3.19` |
 | `build-args` | _(not set; uses Containerfile defaults)_ | `FOREMAN_VERSION=3.19` (and `KATELLO_VERSION`) |
