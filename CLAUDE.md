@@ -38,6 +38,9 @@ tekton-catalog/
       patch.yaml                # memory/CPU patches (OOM fixes for large Foreman images)
     collect-data/
       collect-data.yaml         # Foreman fork: makes releasePlanAdmission + releaseServiceConfig optional
+    check-non-root-user/
+      check-non-root-user.yaml # custom task: fails build if image config runs as root
+      kustomization.yaml
 docs/
   release-logic.md              # nightly release flow and components
 .github/workflows/

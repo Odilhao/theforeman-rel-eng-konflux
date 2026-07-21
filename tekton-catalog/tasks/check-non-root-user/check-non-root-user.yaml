@@ -12,14 +12,15 @@ metadata:
 spec:
   description: |-
     Inspects a built image's config and fails if it is configured to run as root
-    (User is unset, "0", or "root"). Optionally enforces a specific expected user.
+    (User is unset, "0", or "root", including "uid:gid" forms like "0:1000").
+    Optionally enforces a specific expected user.
   params:
     - name: IMAGE_URL
       type: string
       description: Reference of the image to inspect (e.g. quay.io/org/image@sha256:...)
     - name: ALLOWED_USER
       type: string
-      description: If set, the image's configured User must match this value exactly.
+      description: If set, the image's configured user (the part before ":" in a "uid:gid" value) must match this value exactly.
       default: ""
   steps:
     - name: check-non-root-user
@@ -40,14 +41,15 @@ spec:
         set -euo pipefail
 
         USER_VAL=$(skopeo inspect --config "docker://${IMAGE_URL}" | jq -r '.config.User // empty')
+        USER_PART="${USER_VAL%%:*}"
 
-        if [ -z "$USER_VAL" ] || [ "$USER_VAL" = "0" ] || [ "$USER_VAL" = "root" ]; then
+        if [ -z "$USER_PART" ] || [ "$USER_PART" = "0" ] || [ "$USER_PART" = "root" ]; then
           echo "ERROR: Image is configured to run as root (User='${USER_VAL:-unset}')"
           echo "Add a USER directive with a non-root numeric UID to your Dockerfile."
           exit 1
         fi
 
-        if [ -n "$ALLOWED_USER" ] && [ "$USER_VAL" != "$ALLOWED_USER" ]; then
+        if [ -n "$ALLOWED_USER" ] && [ "$USER_PART" != "$ALLOWED_USER" ]; then
           echo "ERROR: Image user '${USER_VAL}' does not match required user '${ALLOWED_USER}'"
           exit 1
         fi

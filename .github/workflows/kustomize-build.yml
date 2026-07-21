@@ -15,8 +15,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Detect changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            pipeline:
+              - 'tekton-catalog/pipelines/push-to-external-registry/**'
+            task-check-non-root-user:
+              - 'tekton-catalog/tasks/check-non-root-user/**'
+
       - name: Set up kustomize
+        if: steps.filter.outputs.pipeline == 'true' || steps.filter.outputs.task-check-non-root-user == 'true'
         uses: imranismail/setup-kustomize@v2
 
       - name: Build push-to-external-registry pipeline
+        if: steps.filter.outputs.pipeline == 'true'
         run: kustomize build tekton-catalog/pipelines/push-to-external-registry/
+
+      - name: Build check-non-root-user task
+        if: steps.filter.outputs.task-check-non-root-user == 'true'
+        run: kustomize build tekton-catalog/tasks/check-non-root-user/
