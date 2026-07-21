@@ -25,13 +25,15 @@ jobs:
               - 'tekton-catalog/pipelines/**'
             task-buildah-oci-ta:
               - 'tekton-catalog/tasks/buildah-oci-ta/**'
+            task-check-non-root-user:
+              - 'tekton-catalog/tasks/check-non-root-user/**'
 
       - name: Set up kustomize
-        if: steps.filter.outputs.pipeline == 'true' || steps.filter.outputs.task-buildah-oci-ta == 'true'
+        if: steps.filter.outputs.pipeline == 'true' || steps.filter.outputs.task-buildah-oci-ta == 'true' || steps.filter.outputs.task-check-non-root-user == 'true'
         uses: imranismail/setup-kustomize@v2
 
       - name: Install tkn CLI
-        if: steps.filter.outputs.pipeline == 'true' || steps.filter.outputs.task-buildah-oci-ta == 'true'
+        if: steps.filter.outputs.pipeline == 'true' || steps.filter.outputs.task-buildah-oci-ta == 'true' || steps.filter.outputs.task-check-non-root-user == 'true'
         run: |
           TKN_VERSION=0.39.0
           curl -Ls "https://github.com/tektoncd/cli/releases/download/v${TKN_VERSION}/tkn_${TKN_VERSION}_Linux_x86_64.tar.gz" \
@@ -40,7 +42,7 @@ jobs:
           tkn version
 
       - name: Login to Quay.io
-        if: steps.filter.outputs.pipeline == 'true' || steps.filter.outputs.task-buildah-oci-ta == 'true'
+        if: steps.filter.outputs.pipeline == 'true' || steps.filter.outputs.task-buildah-oci-ta == 'true' || steps.filter.outputs.task-check-non-root-user == 'true'
         uses: redhat-actions/podman-login@v1
         with:
           registry: quay.io
@@ -52,6 +54,19 @@ jobs:
         run: |
           REPO=quay.io/foreman/tekton-catalog/pipeline-push-to-external-registry
           BUILT=$(kustomize build tekton-catalog/pipelines/push-to-external-registry/)
+          FULL_VERSION=$(echo "$BUILT" | python3 -c "import sys, yaml; d = yaml.safe_load(sys.stdin); print(d['metadata'].get('labels', {}).get('app.kubernetes.io/version') or d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])")
+          MINOR_VERSION=$(echo "$FULL_VERSION" | cut -d. -f1,2)
+          echo "Publishing ${REPO}:${FULL_VERSION} and ${REPO}:${MINOR_VERSION}"
+          echo "$BUILT" | tkn bundle push "${REPO}:${FULL_VERSION}" -f -
+          skopeo copy "docker://${REPO}:${FULL_VERSION}" "docker://${REPO}:${MINOR_VERSION}"
+          skopeo copy "docker://${REPO}:${FULL_VERSION}" "docker://${REPO}:latest"
+          echo "Published ${REPO}:${FULL_VERSION}, ${REPO}:${MINOR_VERSION} and ${REPO}:latest"
+
+      - name: Build and push check-non-root-user task bundle
+        if: steps.filter.outputs.task-check-non-root-user == 'true'
+        run: |
+          REPO=quay.io/foreman/tekton-catalog/task-check-non-root-user
+          BUILT=$(kustomize build tekton-catalog/tasks/check-non-root-user/)
           FULL_VERSION=$(echo "$BUILT" | python3 -c "import sys, yaml; d = yaml.safe_load(sys.stdin); print(d['metadata'].get('labels', {}).get('app.kubernetes.io/version') or d['metadata']['annotations']['tekton.dev/pipelines.minVersion'])")
           MINOR_VERSION=$(echo "$FULL_VERSION" | cut -d. -f1,2)
           echo "Publishing ${REPO}:${FULL_VERSION} and ${REPO}:${MINOR_VERSION}"

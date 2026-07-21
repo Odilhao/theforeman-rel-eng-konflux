@@ -39,3 +39,4 @@ print(version)")
 
 push_bundle pipeline-push-to-external-registry tekton-catalog/pipelines/push-to-external-registry
 push_bundle task-buildah-oci-ta tekton-catalog/tasks/buildah-oci-ta
+push_bundle task-check-non-root-user tekton-catalog/tasks/check-non-root-user

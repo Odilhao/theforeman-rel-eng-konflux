@@ -1,0 +1,55 @@
+---
+# Foreman custom task: verifies a built image is not configured to run as root.
+apiVersion: tekton.dev/v1
+kind: Task
+metadata:
+  name: check-non-root-user
+  labels:
+    app.kubernetes.io/version: "0.1"
+  annotations:
+    tekton.dev/pipelines.minVersion: "0.12.1"
+    tekton.dev/tags: image-build, verification
+spec:
+  description: |-
+    Inspects a built image's config and fails if it is configured to run as root
+    (User is unset, "0", or "root"). Optionally enforces a specific expected user.
+  params:
+    - name: IMAGE_URL
+      type: string
+      description: Reference of the image to inspect (e.g. quay.io/org/image@sha256:...)
+    - name: ALLOWED_USER
+      type: string
+      description: If set, the image's configured User must match this value exactly.
+      default: ""
+  steps:
+    - name: check-non-root-user
+      image: quay.io/konflux-ci/release-service-utils@sha256:5546fa78d3c88d7b6a2e8cff8902f7757f00541d0bbaf113b9f293133894afa3
+      computeResources:
+        limits:
+          memory: 64Mi
+        requests:
+          memory: 64Mi
+          cpu: 50m
+      env:
+        - name: "IMAGE_URL"
+          value: "$(params.IMAGE_URL)"
+        - name: "ALLOWED_USER"
+          value: "$(params.ALLOWED_USER)"
+      script: |
+        #!/usr/bin/env bash
+        set -euo pipefail
+
+        USER_VAL=$(skopeo inspect --config "docker://${IMAGE_URL}" | jq -r '.config.User // empty')
+
+        if [ -z "$USER_VAL" ] || [ "$USER_VAL" = "0" ] || [ "$USER_VAL" = "root" ]; then
+          echo "ERROR: Image is configured to run as root (User='${USER_VAL:-unset}')"
+          echo "Add a USER directive with a non-root numeric UID to your Dockerfile."
+          exit 1
+        fi
+
+        if [ -n "$ALLOWED_USER" ] && [ "$USER_VAL" != "$ALLOWED_USER" ]; then
+          echo "ERROR: Image user '${USER_VAL}' does not match required user '${ALLOWED_USER}'"
+          exit 1
+        fi
+
+        echo "OK: Image user is set to '${USER_VAL}'"
