@@ -5,7 +5,7 @@ kind: Task
 metadata:
   name: check-non-root-user
   labels:
-    app.kubernetes.io/version: "0.1"
+    app.kubernetes.io/version: "0.2"
   annotations:
     tekton.dev/pipelines.minVersion: "0.12.1"
     tekton.dev/tags: image-build, verification
@@ -17,7 +17,11 @@ spec:
   params:
     - name: IMAGE_URL
       type: string
-      description: Reference of the image to inspect (e.g. quay.io/org/image@sha256:...)
+      description: Reference of the image to inspect (tag or digest form, e.g. quay.io/org/image:tag or quay.io/org/image@sha256:...)
+    - name: IMAGE_DIGEST
+      type: string
+      description: If set, IMAGE_URL's tag (if any) is replaced with this digest before inspecting — containers/image rejects references with both a tag and a digest.
+      default: ""
     - name: ALLOWED_USER
       type: string
       description: If set, the image's configured user (the part before ":" in a "uid:gid" value) must match this value exactly.
@@ -34,13 +38,20 @@ spec:
       env:
         - name: "IMAGE_URL"
           value: "$(params.IMAGE_URL)"
+        - name: "IMAGE_DIGEST"
+          value: "$(params.IMAGE_DIGEST)"
         - name: "ALLOWED_USER"
           value: "$(params.ALLOWED_USER)"
       script: |
         #!/usr/bin/env bash
         set -euo pipefail
 
-        USER_VAL=$(skopeo inspect --config "docker://${IMAGE_URL}" | jq -r '.config.User // empty')
+        IMAGE_REF="${IMAGE_URL}"
+        if [ -n "${IMAGE_DIGEST}" ]; then
+          IMAGE_REF="${IMAGE_URL%%:*}@${IMAGE_DIGEST}"
+        fi
+
+        USER_VAL=$(skopeo inspect --config "docker://${IMAGE_REF}" | jq -r '.config.User // empty')
         USER_PART="${USER_VAL%%:*}"
 
         if [ -z "$USER_PART" ] || [ "$USER_PART" = "0" ] || [ "$USER_PART" = "root" ]; then
