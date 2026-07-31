@@ -82,9 +82,9 @@ def test_render_contains_checklist_items(rendered):
 
 
 def test_render_contains_quay_images(rendered):
-    assert "quay.io/theforeman/foreman:" in rendered
-    assert "quay.io/theforeman/pulp:" in rendered
-    assert "quay.io/theforeman/candlepin:" in rendered
+    assert "quay.io/foreman/foreman:" in rendered
+    assert "quay.io/foreman/pulp:" in rendered
+    assert "quay.io/foreman/candlepin:" in rendered
 
 
 def test_render_contains_gh_links(rendered):

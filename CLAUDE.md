@@ -188,7 +188,7 @@ rm -rf /tmp/konflux-branch-3.19/
 
 ## Recovery
 
-**OCI image branches are permanent** — do not delete them. They are part of the project history and the images they produce are published to production Quay namespaces (`quay.io/theforeman/`). A versioned image is reproducible from the same branch at any time.
+**OCI image branches are permanent** — do not delete them. They are part of the project history and the images they produce are published to production Quay namespaces (`quay.io/foreman/`). A versioned image is reproducible from the same branch at any time.
 
 If a branch was created with wrong `.tekton` files, open a PR against the versioned branch to correct them:
 
@@ -250,7 +250,7 @@ Bundles are **not** built from this repo's YAML directly — they are assembled 
 
 ## Architecture: how nightly releases work
 
-Konflux Application/Component/ReleasePlan resources live in the tenants-config GitLab repo, not here. Nightly components: `foreman-develop`, `foreman-proxy-develop`, `pulp-develop`, `candlepin-develop`, `foreman-mcp-server-develop`. These build and release automatically via the `push-to-external-registry` pipeline to `quay.io/theforeman/` with the `nightly` tag.
+Konflux Application/Component/ReleasePlan resources live in the tenants-config GitLab repo, not here. Nightly components: `foreman-develop`, `foreman-proxy-develop`, `pulp-develop`, `candlepin-develop`, `foreman-mcp-server-develop`. These build and release automatically via the `push-to-external-registry` pipeline to `quay.io/foreman/` with the `nightly` tag.
 
 The custom `collect-data` task in this repo is a fork of the upstream Konflux task that makes `releasePlanAdmission` and `releaseServiceConfig` optional (defaulting to `""`), allowing releases without a ReleasePlanAdmission CRD.
 
