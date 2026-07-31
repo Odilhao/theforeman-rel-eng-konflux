@@ -194,7 +194,7 @@ For every component, the push pipeline builds two image references:
    This is an internal Konflux staging image used as input to the release pipeline.
 
 2. **Nightly tag** (applied by the Konflux `push-to-external-registry` ReleasePlan):
-   `quay.io/theforeman/<component>:nightly`
+   `quay.io/foreman/<component>:nightly`
    This is the publicly consumed image.
 
 The PR pipeline tags the staging image as `on-pr-{{revision}}` (commit SHA) and sets

@@ -6,18 +6,18 @@ All projects are configured with automated nightly releases using Konflux Releas
 
 - **Auto-release**: Enabled via `release.appstudio.openshift.io/auto-release: "true"` label
 - **Trigger**: Automatically releases on successful component builds
-- **Target**: External Quay.io registry under `quay.io/theforeman/` organization
+- **Target**: External Quay.io registry under `quay.io/foreman/` organization
 - **Tag**: `nightly`
 
 ### Projects with Nightly Releases
 
 | Project | Component | Repository | Tag |
 |---------|-----------|------------|-----|
-| Candlepin | candlepin-develop | quay.io/theforeman/candlepin | nightly |
-| Foreman | foreman-develop | quay.io/theforeman/foreman | nightly |
-| Foreman | foreman-proxy-develop | quay.io/theforeman/foreman-proxy | nightly |
-| Pulp | pulp-develop | quay.io/theforeman/pulp | nightly |
-| Foreman MCP Server | foreman-mcp-server-develop | quay.io/theforeman/foreman-mcp-server | nightly |
+| Candlepin | candlepin-develop | quay.io/foreman/candlepin | nightly |
+| Foreman | foreman-develop | quay.io/foreman/foreman | nightly |
+| Foreman | foreman-proxy-develop | quay.io/foreman/foreman-proxy | nightly |
+| Pulp | pulp-develop | quay.io/foreman/pulp | nightly |
+| Foreman MCP Server | foreman-mcp-server-develop | quay.io/foreman/foreman-mcp-server | nightly |
 
 ### Point-in-Time Releases
 

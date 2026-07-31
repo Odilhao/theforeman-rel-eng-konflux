@@ -27,7 +27,7 @@ Use either the orchestrator script or follow the manual runbook linked below.
 
 **Published images** (after all steps complete):
 {% for tag in release_tags -%}
-- `quay.io/theforeman/foreman:{{ tag }}`, `quay.io/theforeman/foreman-proxy:{{ tag }}`
+- `quay.io/foreman/foreman:{{ tag }}`, `quay.io/foreman/foreman-proxy:{{ tag }}`
 {% endfor -%}
-- `quay.io/theforeman/pulp:{{ pulp_version }}`, `quay.io/theforeman/pulp:foreman-{{ version }}`
-- `quay.io/theforeman/candlepin:{{ candlepin_version }}`, `quay.io/theforeman/candlepin:{{ candlepin_version_xyz }}`, `quay.io/theforeman/candlepin:foreman-{{ version }}`
+- `quay.io/foreman/pulp:{{ pulp_version }}`, `quay.io/foreman/pulp:foreman-{{ version }}`
+- `quay.io/foreman/candlepin:{{ candlepin_version }}`, `quay.io/foreman/candlepin:{{ candlepin_version_xyz }}`, `quay.io/foreman/candlepin:foreman-{{ version }}`
