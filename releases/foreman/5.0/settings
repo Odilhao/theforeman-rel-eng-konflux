@@ -1,0 +1,10 @@
+VERSION=5.0
+BRANCH_NAME=foreman-5.0
+OCI_REPOS="theforeman/foreman-oci-images theforeman/pulp-oci-images theforeman/candlepin-oci-images"
+RELEASE_TAGS="5.0 5.0.0-rc1"
+RPM_CHECK_URL=https://yum.theforeman.org/releases/5.0/el10/x86_64/repodata/repomd.xml
+RPM_CHECK_TIMEOUT=14400
+KATELLO_VERSION=5.0
+PULP_VERSION=3.105
+CANDLEPIN_VERSION=4.8
+CANDLEPIN_VERSION_XYZ=4.8.4
