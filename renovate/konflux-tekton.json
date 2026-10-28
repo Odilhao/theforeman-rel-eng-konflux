@@ -1,11 +1,18 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": "Shared Renovate preset for The Foreman Konflux and Tekton repositories",
+  "minimumReleaseAge": "0 days",
   "github-actions": {
     "enabled": false
   },
   "tekton": {
     "schedule": ["at any time"]
+  },
+  "rpm-lockfile": {
+    "lockFileMaintenance": {
+      "enabled": true,
+      "schedule": ["at any time"]
+    }
   },
   "packageRules": [
     {
