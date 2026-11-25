@@ -123,32 +123,57 @@ Or configure `GITHUB_UPSTREAM_URL_BASE=git@github.com:theforeman` in
 
 ### Settings file
 
-Create the release settings file at `releases/foreman/3.19/settings` (adjust
-path for your version):
+Create `releases/foreman/<VERSION>/settings` **before** running the branching
+script. Use the RPM branching announcement/post in Discourse as the source of
+truth for the Foreman release tags and companion component versions. Copy its
+RPM repository URL if provided; otherwise verify the exact `repomd.xml` URL
+against the release's Yum repository settings. Do not infer the EL version or
+architecture from an older release: Foreman 5.1 uses EL10, not the EL9 URL shown
+in this 3.19 example. Derive `VERSION` and `BRANCH_NAME` from the release, keep
+the three `OCI_REPOS` entries shown below, and set `RPM_CHECK_TIMEOUT` to the
+normal four-hour gate unless the release team specifies otherwise.
+
+`FOREMANCTL_REF` defaults to `master`; set it to the matching foremanctl stable
+branch when required (Foreman 5.1 uses `3.4-stable`). Candlepin tags default to
+`CANDLEPIN_VERSION`, `CANDLEPIN_VERSION_XYZ`, and `foreman-<VERSION>`. If this
+Foreman release reuses a Candlepin version and must not publish or overwrite
+those shared version tags, set `CANDLEPIN_RELEASE_TAGS` explicitly (Foreman 5.1
+uses only `foreman-5.1`).
+
+Copy this template, replace the release-specific values from the Discourse post,
+and save it at the versioned path:
 
 ```bash
-mkdir -p releases/foreman/3.19
-```
-
-Populate it with the following key=value pairs:
-
-```bash
-# releases/foreman/3.19/settings
+VERSION=3.19  # replace with the release version
+mkdir -p "releases/foreman/$VERSION"
+cat > "releases/foreman/$VERSION/settings" <<'EOF'
 VERSION=3.19
 BRANCH_NAME=foreman-3.19
 OCI_REPOS="theforeman/foreman-oci-images theforeman/pulp-oci-images theforeman/candlepin-oci-images"
 RELEASE_TAGS="3.19 3.19.0-rc1"
 RPM_CHECK_URL=https://yum.theforeman.org/releases/3.19/el9/x86_64/repodata/repomd.xml
 RPM_CHECK_TIMEOUT=14400
-KATELLO_VERSION=<katello-version>       # e.g. 4.21
-PULP_VERSION=<pulp-version>             # e.g. 3.105
-CANDLEPIN_VERSION=<candlepin-version>   # e.g. 4.7
-CANDLEPIN_VERSION_XYZ=<candlepin-xyz>   # e.g. 4.7.4
+KATELLO_VERSION=<katello-version>
+PULP_VERSION=<pulp-version>
+CANDLEPIN_VERSION=<candlepin-version>
+CANDLEPIN_VERSION_XYZ=<candlepin-xyz>
+FOREMANCTL_REF=master
+# Uncomment and set only when overriding Candlepin's default release tags:
+# CANDLEPIN_RELEASE_TAGS="foreman-3.19"
+EOF
 ```
 
-Replace the angle-bracket placeholders with the actual companion release
-versions. Version format must be `MAJOR.MINOR` (e.g., `3.19`); `MAJOR.MINOR.PATCH`
-and `nightly` are rejected.
+The Discourse announcement supplies the release-specific values; the OCI
+`discourse_post` command below reads this settings file and renders the separate
+OCI branching post, so it is run **after** this file is created. Check that all
+placeholders are replaced and that `VERSION` is `MAJOR.MINOR` (for example,
+`3.19`); `MAJOR.MINOR.PATCH` and `nightly` are rejected. Then validate and
+preview the generated OCI post:
+
+```bash
+uv run hack/branch-release/discourse_post --version="$VERSION"
+uv run hack/branch-release/branch_konflux --version="$VERSION" --dry-run
+```
 
 ### Environment variables
 

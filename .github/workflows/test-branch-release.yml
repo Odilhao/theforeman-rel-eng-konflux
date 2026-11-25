@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'hack/branch-release/**'
+      - 'docs/oci-branching-runbook.md'
       - '.github/workflows/test-branch-release.yml'
   workflow_dispatch:
 
