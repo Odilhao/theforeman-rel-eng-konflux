@@ -150,6 +150,37 @@ def test_containerfile_patches_candlepin_oci_images_non_empty(branch_konflux_mod
     assert len(patches) > 0
 
 
+def test_develop_tekton_workflows_removed_idempotently(branch_konflux_mod, tmp_path: Path) -> None:
+    tekton = tmp_path / ".tekton"
+    tekton.mkdir()
+    target = tekton / "foreman-develop-push.yaml"
+    target.write_text("---\\n")
+    unrelated = tekton / "foreman-5.1-push.yaml"
+    unrelated.write_text("---\\n")
+
+    assert branch_konflux_mod.remove_develop_tekton_workflows(
+        "foreman-oci-images", tmp_path, dry_run=False
+    ) is True
+    assert not target.exists()
+    assert unrelated.exists()
+    assert branch_konflux_mod.remove_develop_tekton_workflows(
+        "foreman-oci-images", tmp_path, dry_run=False
+    ) is False
+
+
+def test_workflow_patches_cover_release_tags_and_foremanctl(branch_konflux_mod) -> None:
+    patches = branch_konflux_mod._WORKFLOW_PATCHES
+    assert patches["foreman-oci-images"] == [
+        (".github/workflows/integration.yml", "IMAGE_TAG", "version"),
+        (".github/workflows/integration.yml", "default", "foremanctl_ref"),
+    ]
+    for repo in ("pulp-oci-images", "candlepin-oci-images"):
+        var_to_attr = {var: attr for _, var, attr in patches[repo]}
+        assert var_to_attr["CONTAINER_TAG_STREAM"] == "version"
+        assert var_to_attr["default"] == "foremanctl_ref"
+        assert var_to_attr["PULP_IMAGE_TAG" if repo == "pulp-oci-images" else "CANDLEPIN_IMAGE_TAG"] == "foreman_tag"
+
+
 # ---------------------------------------------------------------------------
 # _MAKEFILE_PATCHES
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ if str(_BR) not in sys.path:
 
 import pytest  # noqa: E402
 
+import lib.config as config_module  # noqa: E402
 from lib.config import ReleaseConfig, _validate_version, load_config  # noqa: E402
 
 
@@ -30,6 +31,34 @@ def test_invalid_version(version: str) -> None:
     with pytest.raises(SystemExit) as exc_info:
         _validate_version(version)
     assert exc_info.value.code == 1
+
+
+def test_load_config_parses_optional_release_overrides(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    settings_dir = tmp_path / "releases" / "foreman" / "5.1"
+    settings_dir.mkdir(parents=True)
+    (settings_dir / "settings").write_text(
+        '''VERSION=5.1
+BRANCH_NAME=foreman-5.1
+OCI_REPOS="theforeman/foreman-oci-images theforeman/pulp-oci-images theforeman/candlepin-oci-images"
+RELEASE_TAGS="5.1 5.1.0"
+RPM_CHECK_URL=https://example.invalid/repomd.xml
+RPM_CHECK_TIMEOUT=14400
+KATELLO_VERSION=5.1.0
+PULP_VERSION=5.0
+CANDLEPIN_VERSION=5.0
+CANDLEPIN_VERSION_XYZ=5.0.3
+FOREMANCTL_REF=3.4-stable
+CANDLEPIN_RELEASE_TAGS="foreman-5.1"
+'''
+    )
+    monkeypatch.setattr(config_module, "_REPO_ROOT", tmp_path)
+
+    cfg = load_config("5.1")
+
+    assert cfg.foremanctl_ref == "3.4-stable"
+    assert cfg.candlepin_release_tags == ["foreman-5.1"]
 
 
 class TestLoadConfig(unittest.TestCase):

@@ -165,7 +165,8 @@ def _project_release_tags(config: ReleaseConfig, project: "_ProjectSpec") -> lis
 
     foreman: Foreman version tags (e.g. ["3.19", "3.19.0-rc1"])
     pulp:    Pulp version + foreman-context tag (e.g. ["3.105", "foreman-3.19"])
-    candlepin: Candlepin XY + XYZ + foreman-context tag (e.g. ["4.7", "4.7.4", "foreman-3.19"])
+    candlepin: Candlepin XY + XYZ + foreman-context tags by default; settings may override
+               these tags when a release reuses an existing Candlepin version.
 
     The foreman-<version> tag is what foremanctl uses to find the correct
     versioned candlepin/pulp images when deploying a specific Foreman release.
@@ -173,6 +174,8 @@ def _project_release_tags(config: ReleaseConfig, project: "_ProjectSpec") -> lis
     if project.app_name == "pulp":
         return [config.pulp_version, config.foreman_tag]
     if project.app_name == "candlepin":
+        if config.candlepin_release_tags is not None:
+            return config.candlepin_release_tags
         return [config.candlepin_version, config.candlepin_version_xyz, config.foreman_tag]
     return list(config.release_tags)
 

@@ -165,7 +165,7 @@ def patch_workflow_env(
         print(f"ERROR: {var_name} not found in {workflow_path}", file=sys.stderr)
         raise SystemExit(1)
 
-    current_value = match.group(2).strip('"')
+    current_value = match.group(2).strip('"\'')
     quoted_value = f'"{new_value}"'
     if match.group(2) == quoted_value or current_value == new_value:
         return False
