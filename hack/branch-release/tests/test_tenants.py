@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import shutil
 import sys
+from dataclasses import replace
 import tempfile
 import unittest
 from pathlib import Path
@@ -147,6 +148,27 @@ class TestGenerateReleaseplanOverlay(unittest.TestCase):
         self.assertIn("../base", text)
         self.assertIn('suffix: "-3-19"', text)
         self.assertNotIn("singleComponentMode", text, "foreman project must not have singleComponentMode")
+
+    def test_candlepin_tags_can_exclude_reused_version_tags(self) -> None:
+        tmp = tempfile.mkdtemp()
+        self.addCleanup(shutil.rmtree, tmp, True)
+        tmp_path = Path(tmp)
+        cfg = replace(
+            SAMPLE_CONFIG,
+            version="5.1",
+            branch_name="foreman-5.1",
+            foreman_tag="foreman-5.1",
+            candlepin_version="5.0",
+            candlepin_version_xyz="5.0.3",
+            candlepin_release_tags=["foreman-5.1"],
+        )
+        (tmp_path / "releaseplans").mkdir(parents=True)
+        generate_releaseplan_overlay(cfg, _PROJECTS["candlepin-oci-images"], tmp_path, dry_run=False)
+
+        text = (tmp_path / "releaseplans" / "5.1" / "kustomization.yaml").read_text()
+        self.assertIn('"foreman-5.1"', text)
+        self.assertNotIn('"5.0"', text)
+        self.assertNotIn('"5.0.3"', text)
 
     def test_tags_come_from_release_tags(self) -> None:
         tmp = tempfile.mkdtemp()

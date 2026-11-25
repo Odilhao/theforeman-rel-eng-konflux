@@ -131,15 +131,47 @@ _MAKEFILE_PATCHES: dict[str, list[tuple[str, str, str]]] = {
 
 # Per-repo GitHub Actions workflow env patches:
 #   {repo_name: [(workflow_rel_path, var_name, config_attr), ...]}
+_DEVELOP_TEKTON_WORKFLOW_GLOBS: dict[str, list[str]] = {
+    "foreman-oci-images": ["*-develop-pull-request.yaml", "*-develop-push.yaml"],
+    "pulp-oci-images": ["*-develop-pull-request.yaml", "*-develop-push.yaml"],
+    "candlepin-oci-images": ["*-develop-pull-request.yaml", "*-develop-push.yaml"],
+}
+
 _WORKFLOW_PATCHES: dict[str, list[tuple[str, str, str]]] = {
     "foreman-oci-images": [
         (".github/workflows/integration.yml", "IMAGE_TAG", "version"),
+        (".github/workflows/integration.yml", "default", "foremanctl_ref"),
+    ],
+    "pulp-oci-images": [
+        (".github/workflows/integration.yml", "CONTAINER_TAG_STREAM", "version"),
+        (".github/workflows/integration.yml", "PULP_IMAGE_TAG", "foreman_tag"),
+        (".github/workflows/integration.yml", "default", "foremanctl_ref"),
+    ],
+    "candlepin-oci-images": [
+        (".github/workflows/integration.yml", "CONTAINER_TAG_STREAM", "version"),
+        (".github/workflows/integration.yml", "CANDLEPIN_IMAGE_TAG", "foreman_tag"),
+        (".github/workflows/integration.yml", "default", "foremanctl_ref"),
     ],
 }
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
+
+def remove_develop_tekton_workflows(repo_name: str, worktree: Path, dry_run: bool) -> bool:
+    """Remove develop push/PR Tekton definitions from a versioned release branch."""
+    tekton_dir = worktree / ".tekton"
+    removed = False
+    for pattern in _DEVELOP_TEKTON_WORKFLOW_GLOBS.get(repo_name, []):
+        for workflow in sorted(tekton_dir.glob(pattern)):
+            if dry_run:
+                print(f"[dry-run] Would remove {workflow}")
+            else:
+                workflow.unlink()
+                print(f"  Removed {workflow}")
+            removed = True
+    return removed
 
 
 def _require_env(name: str) -> str:
@@ -409,6 +441,10 @@ def _step_branch_oci(
         else:
             if patch_makefile_var(makefile, var_name, new_value, dry_run=False):
                 any_patched = True
+
+    # Remove develop Konflux pipelines so versioned branches are not managed by Renovate.
+    if remove_develop_tekton_workflows(repo_name, worktree, dry_run):
+        any_patched = True
 
     # Apply GitHub Actions workflow env patches.
     for rel_path, var_name, config_attr in _WORKFLOW_PATCHES.get(repo_name, []):

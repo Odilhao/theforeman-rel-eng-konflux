@@ -63,6 +63,8 @@ class ReleaseConfig:
     pulp_version: str
     candlepin_version: str
     candlepin_version_xyz: str
+    foremanctl_ref: str = "master"
+    candlepin_release_tags: list[str] | None = None
 
 
 def _parse_int(value: str, field: str, settings_path: Path) -> int:
@@ -152,4 +154,10 @@ def load_config(version: str) -> ReleaseConfig:
         pulp_version=data["PULP_VERSION"],
         candlepin_version=data["CANDLEPIN_VERSION"],
         candlepin_version_xyz=data["CANDLEPIN_VERSION_XYZ"],
+        foremanctl_ref=data.get("FOREMANCTL_REF", "master"),
+        candlepin_release_tags=(
+            data["CANDLEPIN_RELEASE_TAGS"].split()
+            if "CANDLEPIN_RELEASE_TAGS" in data
+            else None
+        ),
     )
