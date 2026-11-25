@@ -21,7 +21,7 @@ jobs:
           python-version: "3.12"
 
       - name: Run tests
-        run: uv run --with pytest pytest hack/branch-release/tests/ -v
+        run: uv run --with pytest --with jinja2 pytest hack/branch-release/tests/ -v
 
       - name: Lint
         run: uv run --with ruff ruff check hack/branch-release/
